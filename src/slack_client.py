@@ -39,6 +39,6 @@ class SlackClient:
         if not games_text:
             message = "No NBA games scheduled for today"
         else:
-            message = f"*NBA Games - {date_string}*\n\n{games_text}"
+            message = f"**TEST** *NBA Games - {date_string}*\n\n{games_text}"
 
         return self.send_message(message)
