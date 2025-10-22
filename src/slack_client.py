@@ -11,7 +11,7 @@ date_string = today.strftime("%m/%d/%Y")
 def slack_group(webhook_url):
     """Determine which slack group is being used based on webhook URL"""
     if webhook_url == Config.SLACK_WEBHOOK_URL:
-        return "#qa-fb-social-alerts"
+        return "#daily-threads"
     elif webhook_url == Config.ED_TEST_WEBHOOK_URL:
         return "#ed-testing"
     else:
@@ -39,6 +39,6 @@ class SlackClient:
         if not games_text:
             message = "No NBA games scheduled for today"
         else:
-            message = f"**TEST** *NBA Games - {date_string}*\n\n{games_text}"
+            message = f"*NBA Games - {date_string}*\n\n{games_text}"
 
         return self.send_message(message)

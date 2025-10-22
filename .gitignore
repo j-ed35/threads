@@ -31,3 +31,9 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+# Test files (local testing only)
+tests/
+test_*.py
+*_test.py
+full_schedule_response.json
+nba_schedule_output.txt
