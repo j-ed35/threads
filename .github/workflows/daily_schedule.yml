@@ -2,10 +2,10 @@ name: Daily NBA Schedule
 
 on:
   schedule:
-    # Runs at 5:30 PM EST (22:30 UTC) every day
+    # Runs at 6:30 PM EST (22:30 UTC) every day
     - cron: '30 22 * * *'
-    # Runs at 11:00 AM EST (16:00 UTC) every day
-    - cron: '0 16 * * *'
+    # Runs at 11:15 AM EST (16:15 UTC) every day
+    - cron: '15 15 * * *'
   
   # Allows manual trigger from Actions tab
   workflow_dispatch:
