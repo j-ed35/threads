@@ -1,6 +1,10 @@
 # Environment variables
 .env
 
+
+schedule.json
+print_mock_games.py
+
 # Python
 __pycache__/
 *.py[cod]
