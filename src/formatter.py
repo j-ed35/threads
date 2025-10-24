@@ -1,4 +1,5 @@
 from datetime import datetime
+from .broadcaster_mapping import get_broadcaster_emoji
 
 
 class GameFormatter:
@@ -66,12 +67,11 @@ class GameFormatter:
 
             broadcaster_text = ""
             if national_broadcasters and len(national_broadcasters) > 0:
-                # Get the first national broadcaster's display name
                 broadcaster_display = national_broadcasters[0].get(
                     "broadcasterDisplay", ""
                 )
                 if broadcaster_display:
-                    broadcaster_text = f", :_{broadcaster_display}:"
+                    broadcaster_text = f", {get_broadcaster_emoji(broadcaster_display)}"
 
             # Format with records and emoji placeholders
             game_line = f"{away_tricode} ({away_wins}-{away_losses}) :_{away_tricode}: at {home_tricode} ({home_wins}-{home_losses}) :_{home_tricode}: | {game_time}{broadcaster_text}"

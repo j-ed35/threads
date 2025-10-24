@@ -5,6 +5,8 @@
 schedule.json
 print_mock_games.py
 count_broadcasters.py
+print_games.py
+
 
 # Python
 __pycache__/
