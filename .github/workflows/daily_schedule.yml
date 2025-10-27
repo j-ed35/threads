@@ -2,8 +2,6 @@ name: Daily NBA Schedule
 
 on:
   schedule:
-    # Runs at 6:30 PM EST (22:30 UTC) every day
-    - cron: '30 22 * * *'
     # Runs at 11:15 AM EST (16:15 UTC) every day
     - cron: '15 15 * * *'
   
@@ -32,4 +30,6 @@ jobs:
         env:
           NBA_API_KEY: ${{ secrets.NBA_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NBA_ALERTS_API_KEY: ${{ secrets.NBA_ALERTS_API_KEY }}
+
         run: python main.py
