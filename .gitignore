@@ -6,6 +6,8 @@ schedule.json
 print_mock_games.py
 count_broadcasters.py
 print_games.py
+docs/
+
 
 
 # Python
@@ -40,3 +42,4 @@ test_*.py
 *_test.py
 full_schedule_response.json
 nba_schedule_output.txt
+

@@ -1,8 +1,13 @@
 from datetime import datetime
 from .broadcaster_mapping import get_broadcaster_emoji
+import time
 
 
 class GameFormatter:
+    def __init__(self, nba_client=None):
+        """Initialize formatter with optional NBA client for fetching storylines"""
+        self.nba_client = nba_client
+
     @staticmethod
     def format_time(game_time_est):
         """Convert ISO time to readable format"""
@@ -12,8 +17,30 @@ class GameFormatter:
         except:
             return "TBD"
 
-    @staticmethod
-    def format_games(data):
+    def format_storylines(self, game_id):
+        """Fetch and format storylines for a game"""
+        if not self.nba_client:
+            return ""
+
+        storylines_data = self.nba_client.get_pregame_storylines(
+            game_id, storyline_count=10
+        )
+
+        if not storylines_data:
+            return ""
+
+        # Extract stories array from response
+        stories = storylines_data.get("stories", [])
+
+        if not stories:
+            return ""
+
+        # Format each storyline with ribbon emoji
+        formatted = [f":reminder_ribbon: {story}" for story in stories]
+
+        return "\n".join(formatted)
+
+    def format_games(self, data):
         """Format games into desired output"""
         if not data or "leagueSchedule" not in data:
             return None
@@ -46,7 +73,6 @@ class GameFormatter:
 
         formatted_games = []
         for game in todays_games:
-            # Note: Using 'awayTeam' instead of 'visitorTeam' for leagueSchedule
             away_team = game.get("awayTeam", {})
             home_team = game.get("homeTeam", {})
 
@@ -73,16 +99,28 @@ class GameFormatter:
                 if broadcaster_display:
                     broadcaster_text = f", {get_broadcaster_emoji(broadcaster_display)}"
 
-            # Format with records and emoji placeholders
+            # Format game line
             game_line = f"{away_tricode} ({away_wins}-{away_losses}) :_{away_tricode}: at {home_tricode} ({home_wins}-{home_losses}) :_{home_tricode}: | {game_time}{broadcaster_text}"
 
-            # Add the required subtext lines
-            subtext = """
-:reminder_ribbon: REMINDER
+            # Fetch storylines for this game
+            game_id = game.get("gameId")
+            storylines_text = ""
+            if game_id and self.nba_client:
+                storylines_text = self.format_storylines(game_id)
+                # Add small delay to be courteous to API
+                time.sleep(0.5)
+
+            # Build the complete game block
+            game_block = game_line
+            if storylines_text:
+                game_block += f"\n{storylines_text}"
+
+            # Add remaining subtext lines
+            game_block += """
 :t20: MILESTONES
 :GTD: GTD/QUESTIONABLE
 :out: INJURIES"""
 
-            formatted_games.append(f"{game_line}\n{subtext}\n")
+            formatted_games.append(game_block + "\n")
 
         return "\n".join(formatted_games)
