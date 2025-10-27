@@ -12,11 +12,13 @@ def main():
         # Initialize clients
         nba = NBAClient()
         slack = SlackClient()
-        formatter = GameFormatter()
+        formatter = GameFormatter(nba_client=nba)  # Pass NBA client to formatter
 
         # Fetch and format games
         print("Fetching today's NBA games...")
         data = nba.get_todays_games()
+
+        print("Fetching storylines for each game...")
         games_text = formatter.format_games(data)
 
         # Send to Slack
