@@ -51,3 +51,31 @@ class NBAClient:
             # Return empty list on error so we don't break the entire schedule
             print(f"Warning: Failed to fetch storylines for game {game_id}: {e}")
             return []
+
+    def get_team_standings(
+        self, season: str = "2025-26", season_type: str = "Regular Season"
+    ) -> dict:
+        """
+        Fetch league standings data.
+
+        Args:
+            season: Season year (e.g., "2025-26")
+            season_type: Type of season ("Regular Season", "Pre Season", etc.)
+
+        Returns:
+            Dictionary containing standings data
+        """
+        url = f"{Config.NBA_API_BASE}/api/standings/league"
+
+        headers = {"X-NBA-Api-Key": Config.NBA_STANDINGS_KEY}
+
+        params = {
+            "leagueId": Config.LEAGUE_ID,
+            "season": season,
+            "seasonType": season_type,
+        }
+
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+
+        return response.json()

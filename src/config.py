@@ -7,6 +7,7 @@ load_dotenv()
 class Config:
     NBA_API_KEY = os.getenv("NBA_API_KEY")
     NBA_ALERTS_API_KEY = os.getenv("NBA_ALERTS_API_KEY")
+    NBA_STANDINGS_KEY = os.getenv("NBA_STANDINGS_KEY")
     NBA_API_BASE = "https://api.nba.com/v0"
     SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
     LEAGUE_ID = "00"  # NBA

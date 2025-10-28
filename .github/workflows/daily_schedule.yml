@@ -31,5 +31,6 @@ jobs:
           NBA_API_KEY: ${{ secrets.NBA_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           NBA_ALERTS_API_KEY: ${{ secrets.NBA_ALERTS_API_KEY }}
+          NBA_STANDINGS_KEY: ${{ secrets.NBA_STANDINGS_KEY }}
 
         run: python main.py
