@@ -34,6 +34,7 @@ jobs:
           NBA_STANDINGS_KEY: ${{ secrets.NBA_STANDINGS_KEY }}
           QUERY_TOOL_API_KEY: ${{ secrets.QUERY_TOOL_API_KEY }}
           STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
+          EDA_API_KEY: ${{ secrets.EDA_API_KEY }}
 
 
         run: python main.py
