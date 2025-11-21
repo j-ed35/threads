@@ -43,3 +43,5 @@ test_*.py
 full_schedule_response.json
 nba_schedule_output.txt
 
+main_test.py
+main_to_ed.py

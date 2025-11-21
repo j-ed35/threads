@@ -1,19 +1,39 @@
 from datetime import datetime
-import time
 from .broadcaster_mapping import get_broadcaster_emoji
 
 
 class GameFormatter:
     """Format NBA game data for Slack messages."""
 
-    def __init__(self, nba_client):
+    def __init__(self, nba_client, rankings_checker=None):
         """
-        Initialize formatter with NBA client for fetching additional data.
+        Initialize formatter with NBA client and optional rankings checker.
 
         Args:
             nba_client: Instance of NBAClient for API calls
+            rankings_checker: Instance of RankingsChecker for rankings data
         """
         self.nba_client = nba_client
+        self.rankings_checker = rankings_checker
+        self.team_rankings = None
+        self.player_rankings = None
+
+    def load_rankings(self, season_year: str = "2025-26"):
+        """
+        Fetch and cache rankings data for the day.
+
+        Args:
+            season_year: Season year (e.g., "2025-26")
+        """
+        if self.rankings_checker:
+            print("Fetching team and player rankings...")
+            self.team_rankings = self.rankings_checker.get_all_top_teams(season_year)
+            self.player_rankings = self.rankings_checker.get_all_top_players(
+                season_year
+            )
+            print(
+                f"Rankings loaded: {len(self.team_rankings)} team stats, {len(self.player_rankings)} player stats"
+            )
 
     @staticmethod
     def format_time(game_time_est):
@@ -26,7 +46,7 @@ class GameFormatter:
 
     def format_games(self, data: dict) -> str:
         """
-        Format game data with standings and pregame storylines.
+        Format game data with standings, rankings, and pregame storylines.
 
         Args:
             data: Schedule data from NBA API
@@ -119,9 +139,72 @@ class GameFormatter:
 
         return f":_{team_tricode.lower()}: {streak} | L10: {l10}\n"
 
+    def _format_team_rankings(self, team_id: str, team_tricode: str) -> str:
+        """
+        Format team rankings lines.
+
+        Args:
+            team_id: Team ID
+            team_tricode: Team tricode (e.g., "ATL")
+
+        Returns:
+            Formatted rankings string
+        """
+        if not self.rankings_checker or not self.team_rankings:
+            # print(f"DEBUG: No rankings checker or team_rankings available")
+            return ""
+
+        # print(f"\nDEBUG: Formatting rankings for {team_tricode} (ID: {team_id})")
+        team_ranks = self.rankings_checker.get_team_rankings(
+            str(team_id), self.team_rankings
+        )
+
+        if not team_ranks:
+            # print(f"DEBUG: No rankings found for {team_tricode}")
+            return ""
+
+        # print(f"DEBUG: Found {len(team_ranks)} rankings for {team_tricode}")
+        lines = []
+        for rank_info in team_ranks:
+            lines.append(
+                f":reminder_ribbon: {team_tricode} ranks #{rank_info['rank']} in "
+                f"{rank_info['stat']} ({rank_info['value']:.1f})\n"
+            )
+
+        return "".join(lines)
+
+    def _format_player_rankings(self, team_tricode: str) -> str:
+        """
+        Format player rankings lines for a team.
+
+        Args:
+            team_tricode: Team tricode (e.g., "ATL")
+
+        Returns:
+            Formatted player rankings string
+        """
+        if not self.rankings_checker or not self.player_rankings:
+            return ""
+
+        player_ranks = self.rankings_checker.get_player_rankings_for_team(
+            team_tricode, self.player_rankings
+        )
+
+        if not player_ranks:
+            return ""
+
+        lines = []
+        for player_info in player_ranks:
+            lines.append(
+                f":reminder_ribbon: {player_info['playerName']} ({team_tricode}) ranks "
+                f"#{player_info['rank']} in {player_info['stat']} ({player_info['value']:.1f})\n"
+            )
+
+        return "".join(lines)
+
     def _format_single_game(self, game: dict, standings_lookup: dict) -> str:
         """
-        Format a single game with standings and storylines.
+        Format a single game with standings, rankings, and storylines.
 
         Args:
             game: Game data dictionary
@@ -171,12 +254,20 @@ class GameFormatter:
         game_text += away_standings_line
         game_text += home_standings_line
 
+        # Add rankings - Team stats first (away, then home)
+        game_text += self._format_team_rankings(away_team.get("teamId"), away_tricode)
+        game_text += self._format_team_rankings(home_team.get("teamId"), home_tricode)
+
+        # Then player stats (away, then home)
+        game_text += self._format_player_rankings(away_tricode)
+        game_text += self._format_player_rankings(home_tricode)
+
         # Add pregame storylines
-        game_id = game.get("gameId")
-        if game_id:
-            storylines = self._get_storylines(game_id)
-            for storyline in storylines:
-                game_text += f":reminder_ribbon: {storyline}\n"
+        # game_id = game.get("gameId")
+        # if game_id:
+        #     storylines = self._get_storylines(game_id)
+        #     for storyline in storylines:
+        #         game_text += f":reminder_ribbon: {storyline}\n"
 
         # Add footer sections
         game_text += ":t20: MILESTONES\n"
@@ -185,28 +276,28 @@ class GameFormatter:
 
         return game_text
 
-    def _get_storylines(self, game_id: str) -> list:
-        """
-        Fetch pregame storylines for a specific game.
+    # def _get_storylines(self, game_id: str) -> list:
+    #     """
+    #     Fetch pregame storylines for a specific game.
 
-        Args:
-            game_id: Game ID
+    #     Args:
+    #         game_id: Game ID
 
-        Returns:
-            List of storyline strings
-        """
-        try:
-            # Add small delay to be respectful to API
-            time.sleep(0.5)
+    #     Returns:
+    #         List of storyline strings
+    #     """
+    #     try:
+    #         # Add small delay to be respectful to API
+    #         time.sleep(0.5)
 
-            data = self.nba_client.get_pregame_storylines(game_id, storyline_count=10)
+    #         data = self.nba_client.get_pregame_storylines(game_id, storyline_count=10)
 
-            # Extract storylines from response
-            if isinstance(data, dict) and "stories" in data:
-                return data["stories"]
+    #         # Extract storylines from response
+    #         if isinstance(data, dict) and "stories" in data:
+    #             return data["stories"]
 
-            return []
+    #         return []
 
-        except Exception as e:
-            print(f"Warning: Could not fetch storylines for game {game_id}: {e}")
-            return []
+    #     except Exception as e:
+    #         print(f"Warning: Could not fetch storylines for game {game_id}: {e}")
+    #         return []

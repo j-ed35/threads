@@ -1,5 +1,6 @@
 from src.config import Config
 from src.nba_api import NBAClient
+from src.rankings import RankingsChecker
 from src.formatter import GameFormatter
 from src.slack_client import SlackClient
 
@@ -11,8 +12,13 @@ def main():
 
         # Initialize clients
         nba = NBAClient()
+        rankings_checker = RankingsChecker()
         slack = SlackClient()
-        formatter = GameFormatter(nba_client=nba)  # Pass NBA client to formatter
+        formatter = GameFormatter(nba_client=nba, rankings_checker=rankings_checker)
+
+        # Load rankings data once
+        print("Loading team and player rankings...")
+        formatter.load_rankings(season_year="2025-26")
 
         # Fetch and format games
         print("Fetching today's NBA games...")
