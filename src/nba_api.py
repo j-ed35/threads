@@ -142,7 +142,7 @@ class NBAClient:
         headers = {"X-NBA-Api-Key": self.stats_key}
         params = {
             "leagueId": Config.LEAGUE_ID,
-            "seasonYear": season_year,
+            "season": season_year,
             "seasonType": "Regular Season",
             "statCategory": stat_category,
             "perMode": per_mode,

@@ -30,6 +30,9 @@ class RankingsChecker:
         "REB": "RPG",
         "STL": "SPG",
         "BLK": "BPG",
+        "FG_PCT": "FG%",
+        "FG3M": "3PM",
+        "FG3_PCT": "3P%",
     }
 
     # Map stat names to their API response keys (lowercase)
@@ -39,6 +42,21 @@ class RankingsChecker:
         "REB": "reb",
         "STL": "stl",
         "BLK": "blk",
+        "FG_PCT": "fgPct",
+        "FG3M": "fg3m",
+        "FG3_PCT": "fg3Pct",
+    }
+
+    # Map our stat names to the API's statCategory parameter
+    PLAYER_STAT_API_CATEGORIES = {
+        "PTS": "PTS",
+        "AST": "AST",
+        "REB": "REB",
+        "STL": "STL",
+        "BLK": "BLK",
+        "FG_PCT": "FG_PCT",
+        "FG3M": "FG3M",
+        "FG3_PCT": "FG3_PCT",
     }
 
     def __init__(self):
@@ -103,44 +121,34 @@ class RankingsChecker:
         """
         Fetch top 10 players for all tracked stats.
 
-        Note: The API only returns data for PTS stat category, so we fetch that
-        and then sort by each stat locally to create separate rankings.
+        Each stat category is fetched separately from the API to ensure
+        accurate rankings (not sorted locally).
 
         Returns:
             Dict mapping stat name to list of player dicts with rank info
         """
         rankings = {}
 
-        # Fetch all players sorted by PTS (this returns ~277 players with all stats)
-        try:
-            response = self.client.get_top_players_by_stat(
-                "PTS",
-                limit=300,
-                season_year=season_year,  # Get more players to ensure top 10 for other stats
-            )
+        # Fetch top players for each stat category separately
+        for stat in self.player_stats:
+            try:
+                # Get the API stat category for this stat
+                api_stat_category = self.PLAYER_STAT_API_CATEGORIES.get(stat, stat)
 
-            # DEBUG: Print response structure
-            # print("\n=== DEBUG: Fetching all players with PTS to extract other stats ===")
-            # print(f"Keys in response: {response.keys()}")
+                response = self.client.get_top_players_by_stat(
+                    api_stat_category,
+                    limit=10,
+                    season_year=season_year,
+                )
 
-            players_data = response.get("players", [])
-            # print(f"Retrieved {len(players_data)} players")
+                players_data = response.get("players", [])
 
-            # if len(players_data) > 0:
-            #    print(f"First player sample: {players_data[0]}")
-
-            # Create rankings for each stat by sorting the players
-            for stat in self.player_stats:
+                # Get the response key for extracting the stat value
                 stat_key = self.PLAYER_STAT_RESPONSE_KEYS.get(stat, stat.lower())
 
-                # Sort players by this stat (descending)
-                sorted_players = sorted(
-                    players_data, key=lambda p: p.get(stat_key, 0), reverse=True
-                )[:10]  # Take top 10
-
-                # Store with proper structure
+                # Store with proper structure (limit to top 10)
                 players = []
-                for rank, player in enumerate(sorted_players, start=1):
+                for player in players_data[:10]:
                     players.append(
                         {
                             "playerId": str(
@@ -150,17 +158,14 @@ class RankingsChecker:
                             "teamTricode": player.get(
                                 "teamAbbreviation", ""
                             ),  # API uses 'teamAbbreviation'
-                            "rank": rank,
+                            "rank": player.get("rank", 0),  # Use API's official rank
                             "value": player.get(stat_key, 0),
                         }
                     )
                 rankings[stat] = players
-                # print(f"Stored top 10 players for {stat}")
 
-        except Exception as e:
-            # print(f"Warning: Failed to fetch player data: {e}")
-            # Initialize empty rankings for all stats
-            for stat in self.player_stats:
+            except Exception as e:
+                # print(f"Warning: Failed to fetch player data for {stat}: {e}")
                 rankings[stat] = []
 
         return rankings
@@ -215,7 +220,8 @@ class RankingsChecker:
 
         for stat, players in player_rankings.items():
             for player in players:
-                if player["teamTricode"] == team_tricode:
+                # Only include players in the top 10 for this stat
+                if player["teamTricode"] == team_tricode and player["rank"] <= 10:
                     player_ranks.append(
                         {
                             "playerName": player["playerName"],

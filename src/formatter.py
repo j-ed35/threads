@@ -195,9 +195,14 @@ class GameFormatter:
 
         lines = []
         for player_info in player_ranks:
+            # Percentage stats need to be multiplied by 100
+            value = player_info['value']
+            if player_info['stat'] in ['FG%', '3P%']:
+                value = value * 100
+
             lines.append(
                 f":reminder_ribbon: {player_info['playerName']} ({team_tricode}) ranks "
-                f"#{player_info['rank']} in {player_info['stat']} ({player_info['value']:.1f})\n"
+                f"#{player_info['rank']} in {player_info['stat']} ({value:.1f})\n"
             )
 
         return "".join(lines)
