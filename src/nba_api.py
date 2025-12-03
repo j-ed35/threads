@@ -88,7 +88,7 @@ class NBAClient:
         Get top teams for a specific stat category.
 
         Args:
-            stat_name: Stat to rank by (e.g., "BASE_PTS", "BASE_FG_PCT", "BASE_AST")
+            stat_name: Stat to rank by (e.g., "BASE_PTS", "BASE_FG_PCT", "BASE_AST", "ADV_TM_DEF_RATING")
             limit: Number of teams to return (default 10)
             season_year: Season (e.g., "2025-26")
 
@@ -101,6 +101,9 @@ class NBAClient:
         # Extract just the stat name for sortColumn (e.g., "PTS" from "BASE_PTS")
         sort_stat = stat_name.split("_", 1)[-1] if "_" in stat_name else stat_name
 
+        # Defensive rating is better when lower, so sort ascending
+        sort_order = "ASC" if stat_name == "ADV_TM_DEF_RATING" else "DESC"
+
         params = {
             "measures": stat_name,
             "leagueId": Config.LEAGUE_ID,
@@ -108,7 +111,7 @@ class NBAClient:
             "seasonType": "Regular Season",
             "perMode": "PerGame",
             "Grouping": "None",
-            "sortColumn": f"{sort_stat}|DESC",
+            "sortColumn": f"{sort_stat}|{sort_order}",
             "MaxRowsReturned": limit,
         }
 

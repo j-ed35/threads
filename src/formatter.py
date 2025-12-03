@@ -167,7 +167,7 @@ class GameFormatter:
         lines = []
         for rank_info in team_ranks:
             lines.append(
-                f":reminder_ribbon: {team_tricode} ranks #{rank_info['rank']} in "
+                f":t10: {team_tricode} ranks #{rank_info['rank']} in "
                 f"{rank_info['stat']} ({rank_info['value']:.1f})\n"
             )
 
@@ -193,17 +193,37 @@ class GameFormatter:
         if not player_ranks:
             return ""
 
-        lines = []
+        # Group stats by player
+        players_dict = {}
         for player_info in player_ranks:
+            player_name = player_info["playerName"]
+            if player_name not in players_dict:
+                players_dict[player_name] = []
+
             # Percentage stats need to be multiplied by 100
-            value = player_info['value']
-            if player_info['stat'] in ['FG%', '3P%']:
+            value = player_info["value"]
+            if player_info["stat"] in ["FG%", "3P%"]:
                 value = value * 100
 
-            lines.append(
-                f":reminder_ribbon: {player_info['playerName']} ({team_tricode}) ranks "
-                f"#{player_info['rank']} in {player_info['stat']} ({value:.1f})\n"
+            players_dict[player_name].append(
+                {
+                    "rank": player_info["rank"],
+                    "stat": player_info["stat"],
+                    "value": value,
+                }
             )
+
+        # Format one line per player with all their stats
+        lines = []
+        for player_name, stats in players_dict.items():
+            stat_parts = []
+            for stat_info in stats:
+                stat_parts.append(
+                    f"#{stat_info['rank']} in {stat_info['stat']} ({stat_info['value']:.1f})"
+                )
+
+            stats_text = ", ".join(stat_parts)
+            lines.append(f":t10: {player_name} ({team_tricode}) ranks {stats_text}\n")
 
         return "".join(lines)
 
@@ -272,10 +292,11 @@ class GameFormatter:
         # if game_id:
         #     storylines = self._get_storylines(game_id)
         #     for storyline in storylines:
-        #         game_text += f":reminder_ribbon: {storyline}\n"
+        #         game_text += f":t10: {storyline}\n"
 
         # Add footer sections
-        game_text += ":t20: MILESTONES\n"
+        game_text += ":notable: NOTABLES\n"
+        game_text += ":mst: MILESTONES\n"
         game_text += ":gtd: GTD/QUESTIONABLE\n"
         game_text += ":out: INJURIES\n"
 

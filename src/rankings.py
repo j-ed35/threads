@@ -13,6 +13,9 @@ class RankingsChecker:
         "BASE_FG3_PCT": "3P%",
         "BASE_AST": "AST",
         "BASE_REB": "REB",
+        "ADV_TM_NET_RATING": "Net RTG",
+        "ADV_TM_OFF_RATING": "Off RTG",
+        "ADV_TM_DEF_RATING": "Def RTG",
     }
 
     # Mapping from request stat to API response stat key
@@ -22,6 +25,9 @@ class RankingsChecker:
         "BASE_FG3_PCT": "FG3_PCT",
         "BASE_AST": "AST_PG",
         "BASE_REB": "REB_PG",
+        "ADV_TM_NET_RATING": "TM_NET_RATING",
+        "ADV_TM_OFF_RATING": "TM_OFF_RATING",
+        "ADV_TM_DEF_RATING": "TM_DEF_RATING",
     }
 
     PLAYER_STAT_NAMES = {

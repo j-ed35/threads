@@ -1,14 +1,7 @@
 # Environment variables
 .env
-
-
-schedule.json
-print_mock_games.py
-count_broadcasters.py
-print_games.py
-docs/
-
-
+.env.*
+!.env.example
 
 # Python
 __pycache__/
@@ -16,34 +9,56 @@ __pycache__/
 *$py.class
 *.so
 .Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
 .venv/
+venv/
 env/
 ENV/
-.venv
-
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# OS
+# OS files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
-# Test files (local testing only)
+.tox/
+.nox/
 tests/
 test_*.py
 *_test.py
+
+# Local development/testing files
+main_test.py
+main_to_ed.py
+print_mock_games.py
+count_broadcasters.py
+print_games.py
+schedule.json
 full_schedule_response.json
 nba_schedule_output.txt
 
-main_test.py
-main_to_ed.py
+# Documentation (local only)
+docs/
 
+# Personal files
 personal/
