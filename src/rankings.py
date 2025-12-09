@@ -6,6 +6,27 @@ from .nba_api import NBAClient
 class RankingsChecker:
     """Handles fetching and checking NBA rankings for teams and players"""
 
+    # Stats where lower values are better (sorted ascending)
+    TEAM_STATS_ASCENDING = {
+        "ADV_TM_DEF_RATING",  # Lower defensive rating is better
+        "OPP_PTS",  # Lower opponent points is better
+    }
+
+    # Stat groupings for display formatting
+    TEAM_STAT_GROUPS = {
+        "basic": [
+            "BASE_PTS",
+            "BASE_FG_PCT",
+            "BASE_FG3_PCT",
+            "BASE_AST",
+            "BASE_REB",
+            "BASE_STL",
+            "BASE_BLK",
+            "OPP_PTS",
+        ],
+        "advanced": ["ADV_TM_NET_RATING", "ADV_TM_OFF_RATING", "ADV_TM_DEF_RATING"],
+    }
+
     # Friendly names for stats
     TEAM_STAT_NAMES = {
         "BASE_PTS": "PPG",
@@ -13,9 +34,12 @@ class RankingsChecker:
         "BASE_FG3_PCT": "3P%",
         "BASE_AST": "AST",
         "BASE_REB": "REB",
+        "BASE_STL": "STL",
+        "BASE_BLK": "BLK",
         "ADV_TM_NET_RATING": "Net RTG",
         "ADV_TM_OFF_RATING": "Off RTG",
         "ADV_TM_DEF_RATING": "Def RTG",
+        "OPP_PTS": "Opp PPG",
     }
 
     # Mapping from request stat to API response stat key
@@ -25,9 +49,12 @@ class RankingsChecker:
         "BASE_FG3_PCT": "FG3_PCT",
         "BASE_AST": "AST_PG",
         "BASE_REB": "REB_PG",
+        "BASE_STL": "STL_PG",
+        "BASE_BLK": "BLK_PG",
         "ADV_TM_NET_RATING": "TM_NET_RATING",
         "ADV_TM_OFF_RATING": "TM_OFF_RATING",
         "ADV_TM_DEF_RATING": "TM_DEF_RATING",
+        "OPP_PTS": "OPP_PTS_PG",
     }
 
     PLAYER_STAT_NAMES = {
@@ -113,7 +140,6 @@ class RankingsChecker:
                         }
                     )
                 rankings[stat] = teams
-                # print(f"Stored {len(teams)} teams for {stat}")
 
             except Exception as e:
                 # print(f"Warning: Failed to fetch top teams for {stat}: {e}")

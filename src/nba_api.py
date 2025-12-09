@@ -98,11 +98,19 @@ class NBAClient:
         url = f"{self.base_url}/api/querytool/season/team"
         headers = {"X-NBA-Api-Key": self.query_tool_key}
 
-        # Extract just the stat name for sortColumn (e.g., "PTS" from "BASE_PTS")
-        sort_stat = stat_name.split("_", 1)[-1] if "_" in stat_name else stat_name
+        # Import here to avoid circular dependency
+        from .rankings import RankingsChecker
 
-        # Defensive rating is better when lower, so sort ascending
-        sort_order = "ASC" if stat_name == "ADV_TM_DEF_RATING" else "DESC"
+        # Use the response key for sortColumn (e.g., "OPP_PTS_PG" for "OPP_PTS")
+        # If no mapping exists, extract the stat name (e.g., "PTS" from "BASE_PTS")
+        sort_stat = RankingsChecker.TEAM_STAT_RESPONSE_KEYS.get(
+            stat_name, stat_name.split("_", 1)[-1] if "_" in stat_name else stat_name
+        )
+
+        # Check if this stat should be sorted ascending (lower is better)
+        sort_order = (
+            "ASC" if stat_name in RankingsChecker.TEAM_STATS_ASCENDING else "DESC"
+        )
 
         params = {
             "measures": stat_name,

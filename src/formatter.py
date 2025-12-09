@@ -141,35 +141,51 @@ class GameFormatter:
 
     def _format_team_rankings(self, team_id: str, team_tricode: str) -> str:
         """
-        Format team rankings lines.
+        Format team rankings lines, grouped by stat category.
 
         Args:
             team_id: Team ID
             team_tricode: Team tricode (e.g., "ATL")
 
         Returns:
-            Formatted rankings string
+            Formatted rankings string with stats grouped on separate lines
         """
         if not self.rankings_checker or not self.team_rankings:
-            # print(f"DEBUG: No rankings checker or team_rankings available")
             return ""
 
-        # print(f"\nDEBUG: Formatting rankings for {team_tricode} (ID: {team_id})")
         team_ranks = self.rankings_checker.get_team_rankings(
             str(team_id), self.team_rankings
         )
 
         if not team_ranks:
-            # print(f"DEBUG: No rankings found for {team_tricode}")
             return ""
 
-        # print(f"DEBUG: Found {len(team_ranks)} rankings for {team_tricode}")
+        # Get stat groups from RankingsChecker
+        from .rankings import RankingsChecker
+        stat_groups = RankingsChecker.TEAM_STAT_GROUPS
+
+        # Create a mapping of friendly stat name to rank info
+        stat_map = {rank_info['stat']: rank_info for rank_info in team_ranks}
+
         lines = []
-        for rank_info in team_ranks:
-            lines.append(
-                f":t10: {team_tricode} ranks #{rank_info['rank']} in "
-                f"{rank_info['stat']} ({rank_info['value']:.1f})\n"
-            )
+
+        # Process each group (basic, advanced)
+        for group_name, stat_keys in stat_groups.items():
+            group_stats = []
+
+            # Collect stats for this group that the team ranks in
+            for stat_key in stat_keys:
+                friendly_name = RankingsChecker.TEAM_STAT_NAMES.get(stat_key)
+                if friendly_name and friendly_name in stat_map:
+                    rank_info = stat_map[friendly_name]
+                    group_stats.append(
+                        f"#{rank_info['rank']} in {rank_info['stat']} ({rank_info['value']:.1f})"
+                    )
+
+            # If this team has any stats in this group, format them on one line
+            if group_stats:
+                stats_text = ", ".join(group_stats)
+                lines.append(f":t10: {team_tricode} ranks {stats_text}\n")
 
         return "".join(lines)
 
