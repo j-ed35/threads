@@ -1,0 +1,51 @@
+{
+  "broadcasters": {
+    "NBA TV": "_NBATV",
+    "ESPN": "_ESPN",
+    "TNT": "_TNT",
+    "ABC": "_ABC",
+    "Prime Video": "_PrimeVideo",
+    "Peacock": "_peacock",
+    "NBC": "_nbc_peacock"
+  },
+  "sections": {
+    "top10": "t10",
+    "notable": "notable",
+    "milestone": "mst",
+    "gtd": "gtd",
+    "out": "out",
+    "streak": "streak"
+  },
+  "teams": {
+    "ATL": "_atl",
+    "BOS": "_bos",
+    "BKN": "_bkn",
+    "CHA": "_cha",
+    "CHI": "_chi",
+    "CLE": "_cle",
+    "DAL": "_dal",
+    "DEN": "_den",
+    "DET": "_det",
+    "GSW": "_gsw",
+    "HOU": "_hou",
+    "IND": "_ind",
+    "LAC": "_lac",
+    "LAL": "_lal",
+    "MEM": "_mem",
+    "MIA": "_mia",
+    "MIL": "_mil",
+    "MIN": "_min",
+    "NOP": "_nop",
+    "NYK": "_nyk",
+    "OKC": "_okc",
+    "ORL": "_orl",
+    "PHI": "_phi",
+    "PHX": "_phx",
+    "POR": "_por",
+    "SAC": "_sac",
+    "SAS": "_sas",
+    "TOR": "_tor",
+    "UTA": "_uta",
+    "WAS": "_was"
+  }
+}

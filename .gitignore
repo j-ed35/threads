@@ -62,3 +62,11 @@ docs/
 
 # Personal files
 personal/
+
+# Local development documentation (contains sensitive info)
+LOCAL_README.md
+LOCAL_README_V2.md
+
+# Logs directory (V2)
+logs/
+*.log
