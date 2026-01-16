@@ -62,3 +62,12 @@ docs/
 
 # Personal files
 personal/
+
+two_main.py
+LOCAL_README.md
+LOCAL_README_V2.md
+logs/
+
+.claude
+
+output/

@@ -13,25 +13,41 @@ def main():
         # Initialize clients
         nba = NBAClient()
         rankings_checker = RankingsChecker()
-        slack = SlackClient()
+
+        # Use ED_TESTING channel for development (change to DAILY_THREADS for production)
+        slack = SlackClient(channel_id=Config.SLACK_CHANNEL_ID_DAILY_THREADS)
+
         formatter = GameFormatter(nba_client=nba, rankings_checker=rankings_checker)
 
         # Load rankings data once
         print("Loading team and player rankings...")
         formatter.load_rankings(season_year="2025-26")
 
-        # Fetch and format games
+        # Fetch games
         print("Fetching today's NBA games...")
         data = nba.get_todays_games()
 
-        print("Fetching storylines for each game...")
-        games_text = formatter.format_games(data)
+        # Format games with parent/thread structure
+        print("Formatting games...")
+        formatted_games = formatter.format_games_with_threads(data)
 
-        # Send to Slack
-        print("Sending to Slack...")
-        result = slack.send_games(games_text)
+        if not formatted_games:
+            print("No games scheduled for today")
+            slack.send_message("No NBA games scheduled for today")
+            return
 
-        print(result)
+        # Send each game as parent message with threaded reply
+        print(f"Sending {len(formatted_games)} games to Slack...")
+        for i, game_data in enumerate(formatted_games, 1):
+            parent_text = game_data["parent"]
+            thread_text = game_data["thread"]
+
+            result = slack.send_game_with_thread(parent_text, thread_text)
+
+            thread_status = "with thread" if thread_text else "no thread"
+            print(f"Game {i}/{len(formatted_games)}: sent ({thread_status})")
+
+        print(f"✓ All {len(formatted_games)} games sent successfully!")
 
     except Exception as e:
         print(f"✗ Error: {e}")

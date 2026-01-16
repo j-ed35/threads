@@ -29,12 +29,12 @@ jobs:
       - name: Post NBA Schedule to Slack
         env:
           NBA_API_KEY: ${{ secrets.NBA_API_KEY }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           NBA_ALERTS_API_KEY: ${{ secrets.NBA_ALERTS_API_KEY }}
           NBA_STANDINGS_KEY: ${{ secrets.NBA_STANDINGS_KEY }}
           QUERY_TOOL_API_KEY: ${{ secrets.QUERY_TOOL_API_KEY }}
           STATS_API_KEY: ${{ secrets.STATS_API_KEY }}
-          ED_TEST_WEBHOOK_URL: ${{ secrets.ED_TEST_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID_DAILY_THREADS: ${{ secrets.SLACK_CHANNEL_ID_DAILY_THREADS }}
 
 
         run: python main.py
