@@ -42,7 +42,5 @@ class Config:
         # Validate Slack OAuth configuration
         if not cls.SLACK_BOT_TOKEN:
             raise ValueError("SLACK_BOT_TOKEN not found in environment")
-        if not cls.SLACK_CHANNEL_ID_ED_TESTING:
-            raise ValueError("SLACK_CHANNEL_ID_ED_TESTING not found in environment")
         if not cls.SLACK_CHANNEL_ID_DAILY_THREADS:
             raise ValueError("SLACK_CHANNEL_ID_DAILY_THREADS not found in environment")
