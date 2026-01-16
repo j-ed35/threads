@@ -15,8 +15,9 @@ class NBAClient:
     def get_todays_games(self):
         """Fetch today's NBA games"""
         # Get current season (e.g., "2025-26")
-        current_year = datetime.now().year
-        current_month = datetime.now().month
+        now = datetime.now()
+        current_year = now.year
+        current_month = now.month
 
         if current_month >= 10:
             season = f"{current_year}-{str(current_year + 1)[-2:]}"
@@ -36,24 +37,6 @@ class NBAClient:
             return response.json()
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to fetch NBA games: {e}")
-
-    # def get_pregame_storylines(self, game_id, storyline_count=10):
-    #     """Fetch pregame storylines for a specific game"""
-    #     url = f"{self.base_url}/api/alerts/topNPregameStorylines"
-    #     headers = {"X-NBA-Api-Key": self.alerts_api_key}
-    #     params = {
-    #         "gameId": game_id,
-    #         "storylineCount": min(storyline_count, 10),  # Cap at API max of 10
-    #     }
-
-    #     try:
-    #         response = requests.get(url, headers=headers, params=params, timeout=10)
-    #         response.raise_for_status()
-    #         return response.json()
-    #     except requests.exceptions.RequestException as e:
-    #         # Return empty list on error so we don't break the entire schedule
-    #         print(f"Warning: Failed to fetch storylines for game {game_id}: {e}")
-    #         return []
 
     def get_team_standings(
         self, season: str = "2025-26", season_type: str = "Regular Season"
@@ -166,3 +149,49 @@ class NBAClient:
             return response.json()
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to fetch player leaders for {stat_category}: {e}")
+
+    def get_query_players_by_stat(
+        self, stat_name: str, limit: int = 10, season_year: str = "2025-26"
+    ) -> dict:
+        """
+        Get top players for a specific stat category using the Query tool instead of official leaders.
+
+        Args:
+            stat_name: Stat to rank by (e.g., "BASE_PTS", "BASE_FG_PCT", "BASE_AST", "ADV_TM_DEF_RATING")
+            limit: Number of players to return (default 10)
+            season_year: Season (e.g., "2025-26")
+
+        Returns:
+            API response with top players sorted by the specified stat
+        """
+        url = f"{self.base_url}/api/querytool/season/player"
+        headers = {"X-NBA-Api-Key": self.query_tool_key}
+
+        from .rankings import RankingsChecker
+
+        sort_stat = RankingsChecker.TEAM_STAT_RESPONSE_KEYS.get(
+            stat_name, stat_name.split("_", 1)[-1] if "_" in stat_name else stat_name
+        )
+
+        # Check if this stat should be sorted ascending (lower is better)
+        sort_order = (
+            "ASC" if stat_name in RankingsChecker.TEAM_STATS_ASCENDING else "DESC"
+        )
+
+        params = {
+            "measures": stat_name,
+            "leagueId": Config.LEAGUE_ID,
+            "seasonYear": season_year,
+            "seasonType": "Regular Season",
+            "perMode": "Totals",
+            "Grouping": "None",
+            "sortColumn": f"{sort_stat}|{sort_order}",
+            "MaxRowsReturned": limit,
+        }
+
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to fetch team stats for {stat_name}: {e}")
