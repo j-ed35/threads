@@ -3,7 +3,18 @@ from .broadcaster_mapping import get_broadcaster_emoji
 
 
 class GameFormatter:
-    """Format NBA game data for Slack messages."""
+    """Format NBA game data for Slack messages with parent/thread structure."""
+
+    # Class-level cache for standings data (shared across instances)
+    _standings_cache = None
+
+    # Stats to show in parent message (limited set)
+    PARENT_TEAM_STATS = {"PPG", "FG%", "3P%", "BLK", "Opp PPG", "3PM"}
+    PARENT_PLAYER_STATS = {"PPG", "APG", "RPG", "FG%", "3PM", "3P%"}
+
+    # Stats to show in thread message (advanced/remaining)
+    THREAD_TEAM_STATS = {"Net RTG", "Off RTG", "Def RTG", "AST", "REB", "STL"}
+    THREAD_PLAYER_STATS = {"SPG", "BPG", "Double Doubles", "Triple Doubles"}
 
     def __init__(self, nba_client, rankings_checker=None):
         """
@@ -17,6 +28,11 @@ class GameFormatter:
         self.rankings_checker = rankings_checker
         self.team_rankings = None
         self.player_rankings = None
+
+    @classmethod
+    def clear_standings_cache(cls):
+        """Clear the standings cache (useful for testing or forcing refresh)."""
+        cls._standings_cache = None
 
     def load_rankings(self, season_year: str = "2025-26"):
         """
@@ -41,12 +57,40 @@ class GameFormatter:
         try:
             dt = datetime.fromisoformat(game_time_est.replace("Z", "+00:00"))
             return dt.strftime("%I:%M %p ET").lstrip("0")
-        except:
+        except Exception:
             return "TBD"
+
+    def format_games_with_threads(self, data: dict) -> list:
+        """
+        Format game data into parent/thread message pairs.
+
+        Args:
+            data: Schedule data from NBA API
+
+        Returns:
+            List of dicts with 'parent' and 'thread' message texts
+        """
+        standings_lookup = self._create_standings_lookup()
+        games = self._extract_games(data)
+
+        if not games:
+            return []
+
+        formatted_games = []
+        for game in games:
+            parent_text, thread_text = self._format_game_with_thread(
+                game, standings_lookup
+            )
+            formatted_games.append({
+                "parent": parent_text,
+                "thread": thread_text,
+            })
+
+        return formatted_games
 
     def format_games(self, data: dict) -> str:
         """
-        Format game data with standings, rankings, and pregame storylines.
+        Format game data (legacy single-message format).
 
         Args:
             data: Schedule data from NBA API
@@ -54,9 +98,7 @@ class GameFormatter:
         Returns:
             Formatted string for Slack message
         """
-        # Fetch standings once for all games
         standings_lookup = self._create_standings_lookup()
-
         games = self._extract_games(data)
 
         if not games:
@@ -64,8 +106,8 @@ class GameFormatter:
 
         formatted_games = []
         for game in games:
-            game_text = self._format_single_game(game, standings_lookup)
-            formatted_games.append(game_text)
+            parent_text, _ = self._format_game_with_thread(game, standings_lookup)
+            formatted_games.append(parent_text)
 
         return "\n".join(formatted_games)
 
@@ -79,8 +121,6 @@ class GameFormatter:
             return []
 
         game_dates = league_schedule["gameDates"]
-
-        # Get today's date in the format the API uses
         today_str = datetime.now().strftime("%m/%d/%Y")
 
         for game_date in game_dates:
@@ -93,43 +133,173 @@ class GameFormatter:
     def _create_standings_lookup(self) -> dict:
         """
         Create a lookup dictionary for team standings data.
+        Uses class-level cache to avoid redundant API calls.
 
         Returns:
             Dictionary mapping teamId to standings data
         """
+        if GameFormatter._standings_cache is not None:
+            return GameFormatter._standings_cache
+
         try:
             standings_data = self.nba_client.get_team_standings()
             lookup = {}
 
             teams = standings_data.get("leagueStandings", {}).get("teams", [])
+            current_month = datetime.now().strftime("%b").lower()
 
             for team in teams:
                 team_id = team.get("teamId")
                 lookup[team_id] = {
+                    "playoffRank": team.get("playoffRank", ""),
                     "currentStreakText": team.get("currentStreakText", ""),
                     "l10": team.get("l10", ""),
+                    "home": team.get("home", ""),
+                    "road": team.get("road", ""),
+                    "l10Home": team.get("l10Home", ""),
+                    "l10Road": team.get("l10Road", ""),
+                    "month": team.get(current_month, ""),
                 }
 
+            GameFormatter._standings_cache = lookup
             return lookup
 
         except Exception as e:
             print(f"Warning: Could not fetch standings data: {e}")
             return {}
 
-    def _format_team_standings_line(
-        self, team_id: int, team_tricode: str, standings_lookup: dict
-    ) -> str:
+    def _format_game_with_thread(
+        self, game: dict, standings_lookup: dict
+    ) -> tuple:
         """
-        Format a single team's standings line.
+        Format a single game into parent and thread messages.
 
         Args:
-            team_id: Team ID
-            team_tricode: Team tricode (e.g., "LAL")
+            game: Game data dictionary
             standings_lookup: Standings lookup dictionary
 
         Returns:
-            Formatted standings line
+            Tuple of (parent_text, thread_text)
         """
+        away_team = game.get("awayTeam", {})
+        home_team = game.get("homeTeam", {})
+
+        away_tricode = away_team.get("teamTricode", "")
+        home_tricode = home_team.get("teamTricode", "")
+        away_wins = away_team.get("wins", 0)
+        away_losses = away_team.get("losses", 0)
+        home_wins = home_team.get("wins", 0)
+        home_losses = home_team.get("losses", 0)
+
+        away_team_id = away_team.get("teamId")
+        home_team_id = home_team.get("teamId")
+        away_rank = standings_lookup.get(away_team_id, {}).get("playoffRank", "")
+        home_rank = standings_lookup.get(home_team_id, {}).get("playoffRank", "")
+
+        game_time = self.format_time(game.get("gameTimeEst", ""))
+
+        # Broadcaster
+        broadcasters = game.get("broadcasters", {})
+        national_broadcasters = broadcasters.get("nationalBroadcasters", [])
+        broadcaster_text = ""
+        if national_broadcasters and len(national_broadcasters) > 0:
+            broadcaster_display = national_broadcasters[0].get("broadcasterDisplay", "")
+            if broadcaster_display:
+                broadcaster_text = f" | {get_broadcaster_emoji(broadcaster_display)}"
+
+        # === PARENT MESSAGE ===
+        parent_lines = []
+
+        # Game header with playoff ranks
+        parent_lines.append(
+            f"#{away_rank} {away_tricode} ({away_wins}-{away_losses}) :_{away_tricode.lower()}: at "
+            f"#{home_rank} {home_tricode} ({home_wins}-{home_losses}) :_{home_tricode.lower()}: | {game_time}{broadcaster_text}"
+        )
+
+        # Standings lines (streak + L10 only in parent)
+        parent_lines.append(self._format_parent_standings(
+            away_team_id, away_tricode, standings_lookup
+        ))
+        parent_lines.append(self._format_parent_standings(
+            home_team_id, home_tricode, standings_lookup
+        ))
+
+        # Team rankings (parent stats only)
+        parent_lines.append(self._format_team_rankings_filtered(
+            away_team_id, away_tricode, self.PARENT_TEAM_STATS
+        ))
+        parent_lines.append(self._format_team_rankings_filtered(
+            home_team_id, home_tricode, self.PARENT_TEAM_STATS
+        ))
+
+        # Player rankings (parent stats only)
+        parent_lines.append(self._format_player_rankings_filtered(
+            away_tricode, self.PARENT_PLAYER_STATS
+        ))
+        parent_lines.append(self._format_player_rankings_filtered(
+            home_tricode, self.PARENT_PLAYER_STATS
+        ))
+
+        # Check if there are thread stats to show
+        has_thread_stats = self._has_thread_stats(
+            away_team_id, home_team_id, away_tricode, home_tricode
+        )
+        if has_thread_stats:
+            parent_lines.append(":t10: Other Top 10s threaded")
+
+        # Footer sections
+        parent_lines.append(":notable: NOTABLES")
+        parent_lines.append(":mst: MILESTONES")
+        parent_lines.append(":gtd: GTD/QUESTIONABLE")
+        parent_lines.append(":out: INJURIES")
+
+        parent_text = "\n".join(line for line in parent_lines if line)
+
+        # === THREAD MESSAGE ===
+        thread_lines = []
+
+        # Thread header
+        thread_lines.append(f":_{away_tricode.lower()}: @ :_{home_tricode.lower()}:")
+
+        # Home/Away records with L10
+        thread_lines.append(self._format_thread_standings(
+            away_team_id, away_tricode, standings_lookup, is_home=False
+        ))
+        thread_lines.append(self._format_thread_standings(
+            home_team_id, home_tricode, standings_lookup, is_home=True
+        ))
+
+        # Team rankings (thread/advanced stats only)
+        thread_lines.append(self._format_team_rankings_filtered(
+            away_team_id, away_tricode, self.THREAD_TEAM_STATS
+        ))
+        thread_lines.append(self._format_team_rankings_filtered(
+            home_team_id, home_tricode, self.THREAD_TEAM_STATS
+        ))
+
+        # Player rankings (thread stats only)
+        thread_lines.append(self._format_player_rankings_filtered(
+            away_tricode, self.THREAD_PLAYER_STATS
+        ))
+        thread_lines.append(self._format_player_rankings_filtered(
+            home_tricode, self.THREAD_PLAYER_STATS
+        ))
+
+        thread_text = "\n".join(line for line in thread_lines if line)
+
+        # Only return thread text if there's meaningful content
+        thread_content = thread_text.strip()
+        has_content = any(
+            line.strip() and not line.startswith(":_")
+            for line in thread_lines[3:]  # Skip header and standings lines
+        )
+
+        return parent_text, thread_text if has_content else None
+
+    def _format_parent_standings(
+        self, team_id: int, team_tricode: str, standings_lookup: dict
+    ) -> str:
+        """Format standings line for parent message (streak + L10)."""
         if team_id not in standings_lookup:
             return ""
 
@@ -137,18 +307,41 @@ class GameFormatter:
         streak = team_data.get("currentStreakText", "")
         l10 = team_data.get("l10", "")
 
-        return f":_{team_tricode.lower()}: {streak} | L10: {l10}\n"
+        return f":_{team_tricode.lower()}: {streak} | L10: {l10}"
 
-    def _format_team_rankings(self, team_id: str, team_tricode: str) -> str:
+    def _format_thread_standings(
+        self, team_id: int, team_tricode: str, standings_lookup: dict, is_home: bool
+    ) -> str:
+        """Format standings line for thread message (home/away record + L10)."""
+        if team_id not in standings_lookup:
+            return ""
+
+        team_data = standings_lookup[team_id]
+
+        if is_home:
+            record = team_data.get("home", "")
+            l10_record = team_data.get("l10Home", "")
+            location = "Home"
+        else:
+            record = team_data.get("road", "")
+            l10_record = team_data.get("l10Road", "")
+            location = "Away"
+
+        return f":_{team_tricode.lower()}: {location}: {record} | L10: {l10_record}"
+
+    def _format_team_rankings_filtered(
+        self, team_id: str, team_tricode: str, allowed_stats: set
+    ) -> str:
         """
-        Format team rankings lines, grouped by stat category.
+        Format team rankings lines for specified stats.
 
         Args:
             team_id: Team ID
             team_tricode: Team tricode (e.g., "ATL")
+            allowed_stats: Set of stat names to include
 
         Returns:
-            Formatted rankings string with stats grouped on separate lines
+            Formatted rankings string
         """
         if not self.rankings_checker or not self.team_rankings:
             return ""
@@ -160,41 +353,37 @@ class GameFormatter:
         if not team_ranks:
             return ""
 
-        # Get stat groups from RankingsChecker
-        from .rankings import RankingsChecker
-        stat_groups = RankingsChecker.TEAM_STAT_GROUPS
+        # Filter to allowed stats
+        filtered_ranks = [r for r in team_ranks if r["stat"] in allowed_stats]
 
-        # Create a mapping of friendly stat name to rank info
-        stat_map = {rank_info['stat']: rank_info for rank_info in team_ranks}
+        if not filtered_ranks:
+            return ""
 
-        lines = []
+        stat_parts = []
+        for rank_info in filtered_ranks:
+            stat_parts.append(
+                f"#{rank_info['rank']} in {rank_info['stat']} ({rank_info['value']:.1f})"
+            )
 
-        # Process each group (basic, advanced)
-        for group_name, stat_keys in stat_groups.items():
-            group_stats = []
+        stats_text = ", ".join(stat_parts)
+        return f":t10: {team_tricode} ranks {stats_text}"
 
-            # Collect stats for this group that the team ranks in
-            for stat_key in stat_keys:
-                friendly_name = RankingsChecker.TEAM_STAT_NAMES.get(stat_key)
-                if friendly_name and friendly_name in stat_map:
-                    rank_info = stat_map[friendly_name]
-                    group_stats.append(
-                        f"#{rank_info['rank']} in {rank_info['stat']} ({rank_info['value']:.1f})"
-                    )
+    # Stat groupings for player display formatting (in display order)
+    PLAYER_STAT_GROUPS = [
+        ["PPG", "RPG", "APG"],      # PTS, REB, AST
+        ["FG%", "3P%", "3PM"],      # FG%, 3P%, 3PM
+        ["SPG", "BPG"],             # STL, BLK
+    ]
 
-            # If this team has any stats in this group, format them on one line
-            if group_stats:
-                stats_text = ", ".join(group_stats)
-                lines.append(f":t10: {team_tricode} ranks {stats_text}\n")
-
-        return "".join(lines)
-
-    def _format_player_rankings(self, team_tricode: str) -> str:
+    def _format_player_rankings_filtered(
+        self, team_tricode: str, allowed_stats: set
+    ) -> str:
         """
-        Format player rankings lines for a team.
+        Format player rankings lines for specified stats, grouped by player.
 
         Args:
             team_tricode: Team tricode (e.g., "ATL")
+            allowed_stats: Set of stat names to include
 
         Returns:
             Formatted player rankings string
@@ -209,137 +398,92 @@ class GameFormatter:
         if not player_ranks:
             return ""
 
-        # Group stats by player
-        players_dict = {}
-        for player_info in player_ranks:
-            player_name = player_info["playerName"]
-            if player_name not in players_dict:
-                players_dict[player_name] = []
+        # Filter to allowed stats
+        filtered_ranks = [r for r in player_ranks if r["stat"] in allowed_stats]
 
-            # Percentage stats need to be multiplied by 100
-            value = player_info["value"]
-            if player_info["stat"] in ["FG%", "3P%"]:
-                value = value * 100
+        if not filtered_ranks:
+            return ""
 
-            players_dict[player_name].append(
-                {
-                    "rank": player_info["rank"],
-                    "stat": player_info["stat"],
-                    "value": value,
-                }
-            )
+        # Group by player
+        player_stats = {}
+        for rank_info in filtered_ranks:
+            player_name = rank_info["playerName"]
+            if player_name not in player_stats:
+                player_stats[player_name] = {}
+            player_stats[player_name][rank_info["stat"]] = rank_info
 
-        # Format one line per player with all their stats
+        # Stats that are totals (no decimal places)
+        totals_stats = {"Double Doubles", "Triple Doubles"}
+
         lines = []
-        for player_name, stats in players_dict.items():
-            stat_parts = []
-            for stat_info in stats:
-                stat_parts.append(
-                    f"#{stat_info['rank']} in {stat_info['stat']} ({stat_info['value']:.1f})"
-                )
+        for player_name in sorted(player_stats.keys()):
+            stats = player_stats[player_name]
 
-            stats_text = ", ".join(stat_parts)
-            lines.append(f":t10: {player_name} ({team_tricode}) ranks {stats_text}\n")
+            # Build lines for each stat group
+            for stat_group in self.PLAYER_STAT_GROUPS:
+                group_parts = []
+                for stat in stat_group:
+                    if stat in stats:
+                        rank_info = stats[stat]
+                        value = rank_info["value"]
 
-        return "".join(lines)
+                        # Percentage stats need to be multiplied by 100
+                        if stat in ["FG%", "3P%"]:
+                            value = value * 100
+
+                        # Format value based on stat type
+                        if stat in totals_stats:
+                            value_str = f"{value:.0f}"
+                        else:
+                            value_str = f"{value:.1f}"
+
+                        group_parts.append(
+                            f"#{rank_info['rank']} in {stat} ({value_str})"
+                        )
+
+                if group_parts:
+                    stats_text = ", ".join(group_parts)
+                    lines.append(
+                        f":t10: {player_name} ({team_tricode}) ranks {stats_text}"
+                    )
+
+        return "\n".join(lines)
+
+    def _has_thread_stats(
+        self, away_team_id, home_team_id, away_tricode, home_tricode
+    ) -> bool:
+        """Check if there are any thread stats to display."""
+        if not self.rankings_checker:
+            return False
+
+        # Check team thread stats
+        for team_id in [away_team_id, home_team_id]:
+            team_ranks = self.rankings_checker.get_team_rankings(
+                str(team_id), self.team_rankings or {}
+            )
+            if any(r["stat"] in self.THREAD_TEAM_STATS for r in team_ranks):
+                return True
+
+        # Check player thread stats
+        for tricode in [away_tricode, home_tricode]:
+            player_ranks = self.rankings_checker.get_player_rankings_for_team(
+                tricode, self.player_rankings or {}
+            )
+            if any(r["stat"] in self.THREAD_PLAYER_STATS for r in player_ranks):
+                return True
+
+        return False
 
     def _format_single_game(self, game: dict, standings_lookup: dict) -> str:
         """
-        Format a single game with standings, rankings, and storylines.
+        Format a single game (legacy method for compatibility).
 
         Args:
             game: Game data dictionary
             standings_lookup: Standings lookup dictionary
 
         Returns:
-            Formatted game string
+            Formatted game string (parent message only)
         """
-        away_team = game.get("awayTeam", {})
-        home_team = game.get("homeTeam", {})
-
-        # Extract team info
-        away_tricode = away_team.get("teamTricode", "")
-        home_tricode = home_team.get("teamTricode", "")
-        away_wins = away_team.get("wins", 0)
-        away_losses = away_team.get("losses", 0)
-        home_wins = home_team.get("wins", 0)
-        home_losses = home_team.get("losses", 0)
-
-        # Format game time
-        game_time = self.format_time(game.get("gameTimeEst", ""))
-
-        # Check for national broadcaster
-        broadcasters = game.get("broadcasters", {})
-        national_broadcasters = broadcasters.get("nationalBroadcasters", [])
-
-        broadcaster_text = ""
-        if national_broadcasters and len(national_broadcasters) > 0:
-            broadcaster_display = national_broadcasters[0].get("broadcasterDisplay", "")
-            if broadcaster_display:
-                broadcaster_text = f" | {get_broadcaster_emoji(broadcaster_display)}"
-
-        # Build game header
-        game_text = (
-            f"{away_tricode} ({away_wins}-{away_losses}) :_{away_tricode.lower()}: at "
-        )
-        game_text += f"{home_tricode} ({home_wins}-{home_losses}) :_{home_tricode.lower()}: | {game_time}{broadcaster_text}\n"
-
-        # Add standings lines
-        away_standings_line = self._format_team_standings_line(
-            away_team.get("teamId"), away_tricode, standings_lookup
-        )
-        home_standings_line = self._format_team_standings_line(
-            home_team.get("teamId"), home_tricode, standings_lookup
-        )
-
-        game_text += away_standings_line
-        game_text += home_standings_line
-
-        # Add rankings - Team stats first (away, then home)
-        game_text += self._format_team_rankings(away_team.get("teamId"), away_tricode)
-        game_text += self._format_team_rankings(home_team.get("teamId"), home_tricode)
-
-        # Then player stats (away, then home)
-        game_text += self._format_player_rankings(away_tricode)
-        game_text += self._format_player_rankings(home_tricode)
-
-        # Add pregame storylines
-        # game_id = game.get("gameId")
-        # if game_id:
-        #     storylines = self._get_storylines(game_id)
-        #     for storyline in storylines:
-        #         game_text += f":t10: {storyline}\n"
-
-        # Add footer sections
-        game_text += ":notable: NOTABLES\n"
-        game_text += ":mst: MILESTONES\n"
-        game_text += ":gtd: GTD/QUESTIONABLE\n"
-        game_text += ":out: INJURIES\n"
-
-        return game_text
-
-    # def _get_storylines(self, game_id: str) -> list:
-    #     """
-    #     Fetch pregame storylines for a specific game.
-
-    #     Args:
-    #         game_id: Game ID
-
-    #     Returns:
-    #         List of storyline strings
-    #     """
-    #     try:
-    #         # Add small delay to be respectful to API
-    #         time.sleep(0.5)
-
-    #         data = self.nba_client.get_pregame_storylines(game_id, storyline_count=10)
-
-    #         # Extract storylines from response
-    #         if isinstance(data, dict) and "stories" in data:
-    #             return data["stories"]
-
-    #         return []
-
-    #     except Exception as e:
-    #         print(f"Warning: Could not fetch storylines for game {game_id}: {e}")
-    #         return []
+        parent_text, _ = self._format_game_with_thread(game, standings_lookup)
+        return parent_text
