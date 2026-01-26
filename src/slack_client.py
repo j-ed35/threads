@@ -62,17 +62,18 @@ class SlackClient:
             raise Exception(f"Failed to send Slack message: {e}")
 
     def send_game_with_thread(
-        self, parent_text: str, thread_text: str = None
+        self, parent_text: str, thread_text: str = None, injury_thread: str = None
     ) -> dict:
         """
-        Send a game message with an optional threaded reply.
+        Send a game message with optional threaded replies.
 
         Args:
             parent_text: Main message text for the parent message
-            thread_text: Optional text for the threaded reply
+            thread_text: Optional text for the first threaded reply (stats)
+            injury_thread: Optional text for the second threaded reply (injuries)
 
         Returns:
-            Dict with parent message response and optional thread response
+            Dict with parent message response and optional thread responses
         """
         # Send parent message
         parent_response = self.send_message(parent_text)
@@ -81,12 +82,18 @@ class SlackClient:
         result = {
             "parent": parent_response,
             "thread": None,
+            "injury_thread": None,
         }
 
-        # Send thread reply if provided
+        # Send first thread reply if provided (stats thread)
         if thread_text and parent_ts:
             thread_response = self.send_message(thread_text, thread_ts=parent_ts)
             result["thread"] = thread_response
+
+        # Send second thread reply if provided (injury thread)
+        if injury_thread and parent_ts:
+            injury_response = self.send_message(injury_thread, thread_ts=parent_ts)
+            result["injury_thread"] = injury_response
 
         return result
 

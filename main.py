@@ -1,3 +1,5 @@
+import argparse
+
 from src.config import Config
 from src.nba_api import NBAClient
 from src.rankings import RankingsChecker
@@ -6,6 +8,15 @@ from src.slack_client import SlackClient
 
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Send NBA game data to Slack")
+    parser.add_argument(
+        "--ed_testing",
+        action="store_true",
+        help="Send to #ed-testing channel instead of #daily-threads",
+    )
+    args = parser.parse_args()
+
     try:
         # Validate configuration
         Config.validate()
@@ -14,8 +25,15 @@ def main():
         nba = NBAClient()
         rankings_checker = RankingsChecker()
 
-        # Use ED_TESTING channel for development (change to DAILY_THREADS for production)
-        slack = SlackClient(channel_id=Config.SLACK_CHANNEL_ID_DAILY_THREADS)
+        # Select channel based on flag (default: daily threads)
+        if args.ed_testing:
+            channel_id = Config.SLACK_CHANNEL_ID_ED_TESTING
+            channel_name = "#ed-testing"
+        else:
+            channel_id = Config.SLACK_CHANNEL_ID_DAILY_THREADS
+            channel_name = "#daily-threads"
+
+        slack = SlackClient(channel_id=channel_id)
 
         formatter = GameFormatter(nba_client=nba, rankings_checker=rankings_checker)
 
@@ -36,16 +54,18 @@ def main():
             slack.send_message("No NBA games scheduled for today")
             return
 
-        # Send each game as parent message with threaded reply
-        print(f"Sending {len(formatted_games)} games to Slack...")
+        # Send each game as parent message with threaded replies
+        print(f"Sending {len(formatted_games)} games to Slack ({channel_name})...")
         for i, game_data in enumerate(formatted_games, 1):
             parent_text = game_data["parent"]
             thread_text = game_data["thread"]
+            injury_thread = game_data.get("injury_thread")
 
-            result = slack.send_game_with_thread(parent_text, thread_text)
+            result = slack.send_game_with_thread(parent_text, thread_text, injury_thread)
 
             thread_status = "with thread" if thread_text else "no thread"
-            print(f"Game {i}/{len(formatted_games)}: sent ({thread_status})")
+            injury_status = "+ injuries" if injury_thread else ""
+            print(f"Game {i}/{len(formatted_games)}: sent ({thread_status}{injury_status})")
 
         print(f"✓ All {len(formatted_games)} games sent successfully!")
 

@@ -1,5 +1,6 @@
 from datetime import datetime
-from .broadcaster_mapping import get_broadcaster_emoji
+from .mapping import get_broadcaster_emoji
+from .injuries import InjuriesClient
 
 
 class GameFormatter:
@@ -28,6 +29,7 @@ class GameFormatter:
         self.rankings_checker = rankings_checker
         self.team_rankings = None
         self.player_rankings = None
+        self.injuries_client = InjuriesClient()
 
     @classmethod
     def clear_standings_cache(cls):
@@ -62,13 +64,13 @@ class GameFormatter:
 
     def format_games_with_threads(self, data: dict) -> list:
         """
-        Format game data into parent/thread message pairs.
+        Format game data into parent/thread message pairs with injuries.
 
         Args:
             data: Schedule data from NBA API
 
         Returns:
-            List of dicts with 'parent' and 'thread' message texts
+            List of dicts with 'parent', 'thread', and 'injury_thread' message texts
         """
         standings_lookup = self._create_standings_lookup()
         games = self._extract_games(data)
@@ -78,13 +80,16 @@ class GameFormatter:
 
         formatted_games = []
         for game in games:
-            parent_text, thread_text = self._format_game_with_thread(
+            parent_text, thread_text, injury_thread = self._format_game_with_thread(
                 game, standings_lookup
             )
-            formatted_games.append({
-                "parent": parent_text,
-                "thread": thread_text,
-            })
+            formatted_games.append(
+                {
+                    "parent": parent_text,
+                    "thread": thread_text,
+                    "injury_thread": injury_thread,
+                }
+            )
 
         return formatted_games
 
@@ -106,13 +111,13 @@ class GameFormatter:
 
         formatted_games = []
         for game in games:
-            parent_text, _ = self._format_game_with_thread(game, standings_lookup)
+            parent_text, _, _ = self._format_game_with_thread(game, standings_lookup)
             formatted_games.append(parent_text)
 
         return "\n".join(formatted_games)
 
     def _extract_games(self, data: dict) -> list:
-        """Extract games list from API response."""
+        """Extract games list from API response, sorted by time and broadcast status."""
         if not data or "leagueSchedule" not in data:
             return []
 
@@ -126,9 +131,33 @@ class GameFormatter:
         for game_date in game_dates:
             date_str = game_date.get("gameDate", "")
             if today_str in date_str:
-                return game_date.get("games", [])
+                games = game_date.get("games", [])
+                return self._sort_games(games)
 
         return []
+
+    def _sort_games(self, games: list) -> list:
+        """
+        Sort games by start time, then by national broadcast status.
+        Games with national broadcasts appear first for the same time slot.
+        """
+
+        def sort_key(game):
+            # Parse game time for sorting
+            game_time = game.get("gameTimeEst", "")
+            try:
+                dt = datetime.fromisoformat(game_time.replace("Z", "+00:00"))
+            except Exception:
+                dt = datetime.max  # Put unparseable times at the end
+
+            # Check for national broadcast (0 = has broadcast, 1 = no broadcast)
+            broadcasters = game.get("broadcasters", {})
+            national_broadcasters = broadcasters.get("nationalBroadcasters", [])
+            has_national = 0 if national_broadcasters else 1
+
+            return (dt, has_national)
+
+        return sorted(games, key=sort_key)
 
     def _create_standings_lookup(self) -> dict:
         """
@@ -168,9 +197,7 @@ class GameFormatter:
             print(f"Warning: Could not fetch standings data: {e}")
             return {}
 
-    def _format_game_with_thread(
-        self, game: dict, standings_lookup: dict
-    ) -> tuple:
+    def _format_game_with_thread(self, game: dict, standings_lookup: dict) -> tuple:
         """
         Format a single game into parent and thread messages.
 
@@ -179,7 +206,7 @@ class GameFormatter:
             standings_lookup: Standings lookup dictionary
 
         Returns:
-            Tuple of (parent_text, thread_text)
+            Tuple of (parent_text, thread_text, injury_thread_text)
         """
         away_team = game.get("awayTeam", {})
         home_team = game.get("homeTeam", {})
@@ -217,28 +244,36 @@ class GameFormatter:
         )
 
         # Standings lines (streak + L10 only in parent)
-        parent_lines.append(self._format_parent_standings(
-            away_team_id, away_tricode, standings_lookup
-        ))
-        parent_lines.append(self._format_parent_standings(
-            home_team_id, home_tricode, standings_lookup
-        ))
+        parent_lines.append(
+            self._format_parent_standings(away_team_id, away_tricode, standings_lookup)
+        )
+        parent_lines.append(
+            self._format_parent_standings(home_team_id, home_tricode, standings_lookup)
+        )
 
         # Team rankings (parent stats only)
-        parent_lines.append(self._format_team_rankings_filtered(
-            away_team_id, away_tricode, self.PARENT_TEAM_STATS
-        ))
-        parent_lines.append(self._format_team_rankings_filtered(
-            home_team_id, home_tricode, self.PARENT_TEAM_STATS
-        ))
+        parent_lines.append(
+            self._format_team_rankings_filtered(
+                away_team_id, away_tricode, self.PARENT_TEAM_STATS
+            )
+        )
+        parent_lines.append(
+            self._format_team_rankings_filtered(
+                home_team_id, home_tricode, self.PARENT_TEAM_STATS
+            )
+        )
 
         # Player rankings (parent stats only)
-        parent_lines.append(self._format_player_rankings_filtered(
-            away_tricode, self.PARENT_PLAYER_STATS
-        ))
-        parent_lines.append(self._format_player_rankings_filtered(
-            home_tricode, self.PARENT_PLAYER_STATS
-        ))
+        parent_lines.append(
+            self._format_player_rankings_filtered(
+                away_tricode, self.PARENT_PLAYER_STATS
+            )
+        )
+        parent_lines.append(
+            self._format_player_rankings_filtered(
+                home_tricode, self.PARENT_PLAYER_STATS
+            )
+        )
 
         # Check if there are thread stats to show
         has_thread_stats = self._has_thread_stats(
@@ -250,8 +285,17 @@ class GameFormatter:
         # Footer sections
         parent_lines.append(":notable: NOTABLES")
         parent_lines.append(":mst: MILESTONES")
-        parent_lines.append(":gtd: GTD/QUESTIONABLE")
-        parent_lines.append(":out: INJURIES")
+
+        # Add injury summary to parent message
+        if home_team_id and away_team_id:
+            try:
+                injury_text = self.injuries_client.format_game_injuries(
+                    home_team_id, away_team_id
+                )
+                if injury_text:
+                    parent_lines.append(injury_text)
+            except Exception as e:
+                print(f"Warning: Could not fetch injury data: {e}")
 
         parent_text = "\n".join(line for line in parent_lines if line)
 
@@ -262,39 +306,60 @@ class GameFormatter:
         thread_lines.append(f":_{away_tricode.lower()}: @ :_{home_tricode.lower()}:")
 
         # Home/Away records with L10
-        thread_lines.append(self._format_thread_standings(
-            away_team_id, away_tricode, standings_lookup, is_home=False
-        ))
-        thread_lines.append(self._format_thread_standings(
-            home_team_id, home_tricode, standings_lookup, is_home=True
-        ))
+        thread_lines.append(
+            self._format_thread_standings(
+                away_team_id, away_tricode, standings_lookup, is_home=False
+            )
+        )
+        thread_lines.append(
+            self._format_thread_standings(
+                home_team_id, home_tricode, standings_lookup, is_home=True
+            )
+        )
 
         # Team rankings (thread/advanced stats only)
-        thread_lines.append(self._format_team_rankings_filtered(
-            away_team_id, away_tricode, self.THREAD_TEAM_STATS
-        ))
-        thread_lines.append(self._format_team_rankings_filtered(
-            home_team_id, home_tricode, self.THREAD_TEAM_STATS
-        ))
+        thread_lines.append(
+            self._format_team_rankings_filtered(
+                away_team_id, away_tricode, self.THREAD_TEAM_STATS
+            )
+        )
+        thread_lines.append(
+            self._format_team_rankings_filtered(
+                home_team_id, home_tricode, self.THREAD_TEAM_STATS
+            )
+        )
 
         # Player rankings (thread stats only)
-        thread_lines.append(self._format_player_rankings_filtered(
-            away_tricode, self.THREAD_PLAYER_STATS
-        ))
-        thread_lines.append(self._format_player_rankings_filtered(
-            home_tricode, self.THREAD_PLAYER_STATS
-        ))
+        thread_lines.append(
+            self._format_player_rankings_filtered(
+                away_tricode, self.THREAD_PLAYER_STATS
+            )
+        )
+        thread_lines.append(
+            self._format_player_rankings_filtered(
+                home_tricode, self.THREAD_PLAYER_STATS
+            )
+        )
 
         thread_text = "\n".join(line for line in thread_lines if line)
 
         # Only return thread text if there's meaningful content
-        thread_content = thread_text.strip()
         has_content = any(
             line.strip() and not line.startswith(":_")
             for line in thread_lines[3:]  # Skip header and standings lines
         )
 
-        return parent_text, thread_text if has_content else None
+        # === INJURY THREAD MESSAGE ===
+        injury_thread = None
+        if home_team_id and away_team_id:
+            try:
+                injury_thread = self.injuries_client.format_game_injury_thread(
+                    home_team_id, away_team_id, home_tricode, away_tricode
+                )
+            except Exception as e:
+                print(f"Warning: Could not format injury thread: {e}")
+
+        return parent_text, thread_text if has_content else None, injury_thread
 
     def _format_parent_standings(
         self, team_id: int, team_tricode: str, standings_lookup: dict
@@ -370,9 +435,9 @@ class GameFormatter:
 
     # Stat groupings for player display formatting (in display order)
     PLAYER_STAT_GROUPS = [
-        ["PPG", "RPG", "APG"],      # PTS, REB, AST
-        ["FG%", "3P%", "3PM"],      # FG%, 3P%, 3PM
-        ["SPG", "BPG"],             # STL, BLK
+        ["PPG", "RPG", "APG"],  # PTS, REB, AST
+        ["FG%", "3P%", "3PM"],  # FG%, 3P%, 3PM
+        ["SPG", "BPG"],  # STL, BLK
     ]
 
     def _format_player_rankings_filtered(
@@ -485,5 +550,5 @@ class GameFormatter:
         Returns:
             Formatted game string (parent message only)
         """
-        parent_text, _ = self._format_game_with_thread(game, standings_lookup)
+        parent_text, _, _ = self._format_game_with_thread(game, standings_lookup)
         return parent_text
