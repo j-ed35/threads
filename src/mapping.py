@@ -7,6 +7,7 @@ BROADCASTER_EMOJI_MAP = {
     "Prime Video": "PrimeVideo",
     "Peacock": "peacock",
     "NBC": "nbc_peacock",
+    "Telemundo": "nbc_peacock",
 }
 
 
