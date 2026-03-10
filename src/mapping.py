@@ -19,4 +19,4 @@ def get_broadcaster_emoji(broadcaster_name):
     return f":_{emoji_name}:"
 
 
-PLAYERS_EXCLUDED = {"Terry Rozier", "Jayson Tatum"}
+PLAYERS_EXCLUDED = {"Terry Rozier"}

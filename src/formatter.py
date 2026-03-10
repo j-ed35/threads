@@ -182,6 +182,7 @@ class GameFormatter:
                 lookup[team_id] = {
                     "playoffRank": team.get("playoffRank", ""),
                     "currentStreakText": team.get("currentStreakText", ""),
+                    "clinchIndicator": team.get("clinchIndicator", ""),
                     "l10": team.get("l10", ""),
                     "home": team.get("home", ""),
                     "road": team.get("road", ""),
@@ -220,8 +221,16 @@ class GameFormatter:
 
         away_team_id = away_team.get("teamId")
         home_team_id = home_team.get("teamId")
-        away_rank = standings_lookup.get(away_team_id, {}).get("playoffRank", "")
-        home_rank = standings_lookup.get(home_team_id, {}).get("playoffRank", "")
+        away_team_data = standings_lookup.get(away_team_id, {})
+        home_team_data = standings_lookup.get(home_team_id, {})
+        away_rank = away_team_data.get("playoffRank", "")
+        home_rank = home_team_data.get("playoffRank", "")
+        away_clinch_indicator = self._format_clinch_indicator(
+            away_team_data.get("clinchIndicator", "")
+        )
+        home_clinch_indicator = self._format_clinch_indicator(
+            home_team_data.get("clinchIndicator", "")
+        )
 
         game_time = self.format_time(game.get("gameTimeEst", ""))
 
@@ -239,8 +248,8 @@ class GameFormatter:
 
         # Game header with playoff ranks
         parent_lines.append(
-            f"#{away_rank} {away_tricode} ({away_wins}-{away_losses}) :_{away_tricode.lower()}: at "
-            f"#{home_rank} {home_tricode} ({home_wins}-{home_losses}) :_{home_tricode.lower()}: | {game_time}{broadcaster_text}"
+            f"#{away_rank} {away_tricode} ({away_wins}-{away_losses}){away_clinch_indicator} :_{away_tricode.lower()}: at "
+            f"#{home_rank} {home_tricode} ({home_wins}-{home_losses}){home_clinch_indicator} :_{home_tricode.lower()}: | {game_time}{broadcaster_text}"
         )
 
         # Standings lines (streak + L10 only in parent)
@@ -393,6 +402,18 @@ class GameFormatter:
             location = "Away"
 
         return f":_{team_tricode.lower()}: {location}: {record} | L10: {l10_record}"
+
+    @staticmethod
+    def _format_clinch_indicator(clinch_indicator: str) -> str:
+        """Normalize clinch indicator for parent game header output."""
+        normalized = str(clinch_indicator or "").strip()
+        if not normalized:
+            return ""
+
+        if normalized.startswith("-"):
+            return f" {normalized}"
+
+        return f" - {normalized}"
 
     def _format_team_rankings_filtered(
         self, team_id: str, team_tricode: str, allowed_stats: set
