@@ -6,8 +6,8 @@ from .injuries import InjuriesClient
 class GameFormatter:
     """Format NBA game data for Slack messages with parent/thread structure."""
 
-    # Class-level cache for standings data (shared across instances)
-    _standings_cache = None
+    # Class-level cache for playoff bracket data (shared across instances)
+    _bracket_cache = None
 
     # Stats to show in parent message (limited set)
     PARENT_TEAM_STATS = {"PPG", "FG%", "3P%", "BLK", "Opp PPG", "3PM"}
@@ -33,8 +33,8 @@ class GameFormatter:
 
     @classmethod
     def clear_standings_cache(cls):
-        """Clear the standings cache (useful for testing or forcing refresh)."""
-        cls._standings_cache = None
+        """Clear the bracket cache (useful for testing or forcing refresh)."""
+        cls._bracket_cache = None
 
     def load_rankings(self, season_year: str = "2025-26"):
         """
@@ -72,7 +72,7 @@ class GameFormatter:
         Returns:
             List of dicts with 'parent', 'thread', and 'injury_thread' message texts
         """
-        standings_lookup = self._create_standings_lookup()
+        bracket_lookup = self._create_bracket_lookup()
         games = self._extract_games(data)
 
         if not games:
@@ -81,7 +81,7 @@ class GameFormatter:
         formatted_games = []
         for game in games:
             parent_text, thread_text, injury_thread = self._format_game_with_thread(
-                game, standings_lookup
+                game, bracket_lookup
             )
             formatted_games.append(
                 {
@@ -103,7 +103,7 @@ class GameFormatter:
         Returns:
             Formatted string for Slack message
         """
-        standings_lookup = self._create_standings_lookup()
+        bracket_lookup = self._create_bracket_lookup()
         games = self._extract_games(data)
 
         if not games:
@@ -111,7 +111,7 @@ class GameFormatter:
 
         formatted_games = []
         for game in games:
-            parent_text, _, _ = self._format_game_with_thread(game, standings_lookup)
+            parent_text, _, _ = self._format_game_with_thread(game, bracket_lookup)
             formatted_games.append(parent_text)
 
         return "\n".join(formatted_games)
@@ -159,52 +159,62 @@ class GameFormatter:
 
         return sorted(games, key=sort_key)
 
-    def _create_standings_lookup(self) -> dict:
+    def _create_bracket_lookup(self) -> dict:
         """
-        Create a lookup dictionary for team standings data.
+        Create a lookup dictionary for active playoff series, keyed by teamId.
         Uses class-level cache to avoid redundant API calls.
 
         Returns:
-            Dictionary mapping teamId to standings data
+            Dictionary mapping teamId to series data + perspective ("high"/"low")
         """
-        if GameFormatter._standings_cache is not None:
-            return GameFormatter._standings_cache
+        if GameFormatter._bracket_cache is not None:
+            return GameFormatter._bracket_cache
 
         try:
-            standings_data = self.nba_client.get_team_standings()
+            bracket_data = self.nba_client.get_playoff_bracket()
             lookup = {}
 
-            teams = standings_data.get("leagueStandings", {}).get("teams", [])
-            current_month = datetime.now().strftime("%b").lower()
+            series_list = bracket_data.get("bracket", {}).get(
+                "playoffBracketSeries", []
+            )
 
-            for team in teams:
-                team_id = team.get("teamId")
-                lookup[team_id] = {
-                    "playoffRank": team.get("playoffRank", ""),
-                    "currentStreakText": team.get("currentStreakText", ""),
-                    "clinchIndicator": team.get("clinchIndicator", ""),
-                    "l10": team.get("l10", ""),
-                    "home": team.get("home", ""),
-                    "road": team.get("road", ""),
-                    "l10Home": team.get("l10Home", ""),
-                    "l10Road": team.get("l10Road", ""),
-                    "month": team.get(current_month, ""),
+            for series in series_list:
+                high_id = series.get("highSeedId")
+                low_id = series.get("lowSeedId")
+                base = {
+                    "roundNumber": series.get("roundNumber"),
+                    "seriesText": series.get("seriesText", ""),
+                    "seriesConference": series.get("seriesConference", ""),
+                    "poRoundDesc": series.get("poRoundDesc", ""),
+                    "nextGameNumber": series.get("nextGameNumber", ""),
+                    "highSeedRank": series.get("highSeedRank"),
+                    "highSeedTricode": series.get("highSeedTricode", ""),
+                    "highSeedRegSeasonWins": series.get("highSeedRegSeasonWins"),
+                    "highSeedRegSeasonLosses": series.get("highSeedRegSeasonLosses"),
+                    "lowSeedRank": series.get("lowSeedRank"),
+                    "lowSeedTricode": series.get("lowSeedTricode", ""),
+                    "lowSeedRegSeasonWins": series.get("lowSeedRegSeasonWins"),
+                    "lowSeedRegSeasonLosses": series.get("lowSeedRegSeasonLosses"),
                 }
+                if high_id:
+                    lookup[high_id] = {**base, "perspective": "high"}
+                if low_id:
+                    lookup[low_id] = {**base, "perspective": "low"}
 
-            GameFormatter._standings_cache = lookup
+            GameFormatter._bracket_cache = lookup
             return lookup
 
         except Exception as e:
-            print(f"Warning: Could not fetch standings data: {e}")
+            print(f"Warning: Could not fetch playoff bracket: {e}")
             return {}
 
-    def _format_game_with_thread(self, game: dict, standings_lookup: dict) -> tuple:
+    def _format_game_with_thread(self, game: dict, bracket_lookup: dict) -> tuple:
         """
         Format a single game into parent and thread messages.
 
         Args:
             game: Game data dictionary
-            standings_lookup: Standings lookup dictionary
+            bracket_lookup: Playoff bracket lookup keyed by teamId
 
         Returns:
             Tuple of (parent_text, thread_text, injury_thread_text)
@@ -221,16 +231,25 @@ class GameFormatter:
 
         away_team_id = away_team.get("teamId")
         home_team_id = home_team.get("teamId")
-        away_team_data = standings_lookup.get(away_team_id, {})
-        home_team_data = standings_lookup.get(home_team_id, {})
-        away_rank = away_team_data.get("playoffRank", "")
-        home_rank = home_team_data.get("playoffRank", "")
-        away_clinch_indicator = self._format_clinch_indicator(
-            away_team_data.get("clinchIndicator", "")
-        )
-        home_clinch_indicator = self._format_clinch_indicator(
-            home_team_data.get("clinchIndicator", "")
-        )
+
+        # Resolve series via bracket. Both teams in a matchup share the same series entry.
+        series = bracket_lookup.get(home_team_id) or bracket_lookup.get(away_team_id)
+
+        away_rank = ""
+        home_rank = ""
+        away_reg_record = None
+        home_reg_record = None
+        if series:
+            if series.get("highSeedTricode") == away_tricode:
+                away_rank = series.get("highSeedRank", "")
+                home_rank = series.get("lowSeedRank", "")
+                away_reg_record = (series.get("highSeedRegSeasonWins"), series.get("highSeedRegSeasonLosses"))
+                home_reg_record = (series.get("lowSeedRegSeasonWins"), series.get("lowSeedRegSeasonLosses"))
+            else:
+                away_rank = series.get("lowSeedRank", "")
+                home_rank = series.get("highSeedRank", "")
+                away_reg_record = (series.get("lowSeedRegSeasonWins"), series.get("lowSeedRegSeasonLosses"))
+                home_reg_record = (series.get("highSeedRegSeasonWins"), series.get("highSeedRegSeasonLosses"))
 
         game_time = self.format_time(game.get("gameTimeEst", ""))
 
@@ -246,19 +265,34 @@ class GameFormatter:
         # === PARENT MESSAGE ===
         parent_lines = []
 
-        # Game header with playoff ranks
-        parent_lines.append(
-            f"#{away_rank} {away_tricode} ({away_wins}-{away_losses}){away_clinch_indicator} :_{away_tricode.lower()}: at "
-            f"#{home_rank} {home_tricode} ({home_wins}-{home_losses}){home_clinch_indicator} :_{home_tricode.lower()}: | {game_time}{broadcaster_text}"
-        )
+        if series:
+            game_prefix = ""
+            next_game_number = series.get("nextGameNumber", "")
+            if next_game_number:
+                game_prefix = f"{next_game_number} – "
 
-        # Standings lines (streak + L10 only in parent)
-        parent_lines.append(
-            self._format_parent_standings(away_team_id, away_tricode, standings_lookup)
-        )
-        parent_lines.append(
-            self._format_parent_standings(home_team_id, home_tricode, standings_lookup)
-        )
+            away_seed_chip = f"#{away_rank} " if away_rank != "" else ""
+            home_seed_chip = f"#{home_rank} " if home_rank != "" else ""
+
+            parent_lines.append(
+                f"{game_prefix}{away_seed_chip}{away_tricode} :_{away_tricode.lower()}: at "
+                f"{home_seed_chip}{home_tricode} :_{home_tricode.lower()}: | {game_time}{broadcaster_text}"
+            )
+
+            conference = series.get("seriesConference", "")
+            round_desc = series.get("poRoundDesc", "")
+            series_text = series.get("seriesText", "")
+            round_label = " ".join(p for p in [conference, round_desc] if p)
+            if round_label and series_text:
+                parent_lines.append(f"{round_label} – {series_text}")
+            elif series_text:
+                parent_lines.append(series_text)
+        else:
+            # Fallback when bracket has no entry for this matchup
+            parent_lines.append(
+                f"{away_tricode} ({away_wins}-{away_losses}) :_{away_tricode.lower()}: at "
+                f"{home_tricode} ({home_wins}-{home_losses}) :_{home_tricode.lower()}: | {game_time}{broadcaster_text}"
+            )
 
         # Team rankings (parent stats only)
         parent_lines.append(
@@ -314,16 +348,12 @@ class GameFormatter:
         # Thread header
         thread_lines.append(f":_{away_tricode.lower()}: @ :_{home_tricode.lower()}:")
 
-        # Home/Away records with L10
+        # Regular season records (replaces home/away record + L10)
         thread_lines.append(
-            self._format_thread_standings(
-                away_team_id, away_tricode, standings_lookup, is_home=False
-            )
+            self._format_thread_reg_season(away_tricode, away_reg_record)
         )
         thread_lines.append(
-            self._format_thread_standings(
-                home_team_id, home_tricode, standings_lookup, is_home=True
-            )
+            self._format_thread_reg_season(home_tricode, home_reg_record)
         )
 
         # Team rankings (thread/advanced stats only)
@@ -370,50 +400,13 @@ class GameFormatter:
 
         return parent_text, thread_text if has_content else None, injury_thread
 
-    def _format_parent_standings(
-        self, team_id: int, team_tricode: str, standings_lookup: dict
-    ) -> str:
-        """Format standings line for parent message (streak + L10)."""
-        if team_id not in standings_lookup:
-            return ""
-
-        team_data = standings_lookup[team_id]
-        streak = team_data.get("currentStreakText", "")
-        l10 = team_data.get("l10", "")
-
-        return f":_{team_tricode.lower()}: {streak} | L10: {l10}"
-
-    def _format_thread_standings(
-        self, team_id: int, team_tricode: str, standings_lookup: dict, is_home: bool
-    ) -> str:
-        """Format standings line for thread message (home/away record + L10)."""
-        if team_id not in standings_lookup:
-            return ""
-
-        team_data = standings_lookup[team_id]
-
-        if is_home:
-            record = team_data.get("home", "")
-            l10_record = team_data.get("l10Home", "")
-            location = "Home"
-        else:
-            record = team_data.get("road", "")
-            l10_record = team_data.get("l10Road", "")
-            location = "Away"
-
-        return f":_{team_tricode.lower()}: {location}: {record} | L10: {l10_record}"
-
     @staticmethod
-    def _format_clinch_indicator(clinch_indicator: str) -> str:
-        """Normalize clinch indicator for parent game header output."""
-        normalized = str(clinch_indicator or "").strip()
-        if not normalized:
+    def _format_thread_reg_season(team_tricode: str, reg_record) -> str:
+        """Format regular-season record line for thread message."""
+        if not reg_record or reg_record[0] is None or reg_record[1] is None:
             return ""
-
-        if normalized.startswith("-"):
-            return f" {normalized}"
-
-        return f" - {normalized}"
+        wins, losses = reg_record
+        return f":_{team_tricode.lower()}: Regular Season: {wins}-{losses}"
 
     def _format_team_rankings_filtered(
         self, team_id: str, team_tricode: str, allowed_stats: set
@@ -560,16 +553,16 @@ class GameFormatter:
 
         return False
 
-    def _format_single_game(self, game: dict, standings_lookup: dict) -> str:
+    def _format_single_game(self, game: dict, bracket_lookup: dict) -> str:
         """
         Format a single game (legacy method for compatibility).
 
         Args:
             game: Game data dictionary
-            standings_lookup: Standings lookup dictionary
+            bracket_lookup: Playoff bracket lookup dictionary
 
         Returns:
             Formatted game string (parent message only)
         """
-        parent_text, _, _ = self._format_game_with_thread(game, standings_lookup)
+        parent_text, _, _ = self._format_game_with_thread(game, bracket_lookup)
         return parent_text

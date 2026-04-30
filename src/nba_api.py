@@ -64,6 +64,28 @@ class NBAClient:
 
         return response.json()
 
+    def get_playoff_bracket(self, season: str = "2025") -> dict:
+        """
+        Fetch playoff bracket data.
+
+        Args:
+            season: Season start year (e.g., "2025" for 2025-26)
+        """
+        url = f"{self.base_url}/api/standings/playoff/bracket"
+        headers = {"X-NBA-Api-Key": self.standings_key}
+        params = {
+            "leagueId": Config.LEAGUE_ID,
+            "season": season,
+            "bracketState": "PlayoffBracket",
+        }
+
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to fetch playoff bracket: {e}")
+
     def get_top_teams_by_stat(
         self, stat_name: str, limit: int = 10, season_year: str = "2025-26"
     ) -> dict:
@@ -99,7 +121,7 @@ class NBAClient:
             "measures": stat_name,
             "leagueId": Config.LEAGUE_ID,
             "seasonYear": season_year,
-            "seasonType": "Regular Season",
+            "seasonType": "Playoffs",
             "perMode": "PerGame",
             "Grouping": "None",
             "sortColumn": f"{sort_stat}|{sort_order}",
@@ -137,7 +159,7 @@ class NBAClient:
         params = {
             "leagueId": Config.LEAGUE_ID,
             "season": season_year,
-            "seasonType": "Regular Season",
+            "seasonType": "Playoffs",
             "statCategory": stat_category,
             "perMode": per_mode,
             "topX": limit,
@@ -182,7 +204,7 @@ class NBAClient:
             "measures": stat_name,
             "leagueId": Config.LEAGUE_ID,
             "seasonYear": season_year,
-            "seasonType": "Regular Season",
+            "seasonType": "Playoffs",
             "perMode": "Totals",
             "Grouping": "None",
             "sortColumn": f"{sort_stat}|{sort_order}",
