@@ -7,7 +7,7 @@ Posts one Slack message per NBA game, with a threaded reply for secondary rankin
 1. Choose a channel from the flags. `Config.channel()` validates the API keys and that channel's ID only, then returns `(channel_id, ChannelSettings)`.
 2. Work out the date (`--date M-D-YY` or today) and the season from it (`season_for`).
 3. Load in parallel: the full-season schedule, standings, the injury report (only if `include_injuries`), and every team and player top-10 ranking (`RankingsChecker.load`, also parallel). If standings fail, the run continues without seeds, streaks or home/away lines. A single failed ranking, leaderboard or roster fetch is logged and skipped.
-4. Filter the schedule to the date's games. If there are none, post "No NBA games scheduled for …" and stop.
+4. Filter the schedule to the date's regular-season games: `gameId` starting `002`, which includes NBA Cup group and knockout games. Preseason (`001`), All-Star (`003`), playoffs (`004`), play-in (`005`) and the Cup final (`006`) are skipped. If no games remain, post "No NBA games scheduled for …" and stop.
 5. If `include_milestones`: load all career leaderboards and each playing team's roster once, in parallel (`MilestonesChecker.load`).
 6. Format every game (`GameFormatter.format_game`), then post `:nba: N Games for M-D-YY` plus two `———` dividers, then each game's parent and replies.
 
@@ -92,7 +92,12 @@ See `.env.example`.
 | `SLACK_CHANNEL_ID_*` | one per channel (above) |
 | `ALL_TIME_LISTS_DIR` | optional; output dir for `leaders.py --csv` |
 
-The GitHub Action (`.github/workflows/daily_schedule.yml`) passes only the vars a `--daily_threads` run needs. Scheduled workflows run only from the default branch.
+## Deployment
+
+- `.github/workflows/daily_schedule.yml` ("Daily NBA Schedule") runs `uv run python main.py --daily_threads` on cron `15 16 * * *`, which is 12:15 PM ET during daylight saving and 11:15 AM ET in winter. It can also be run by hand from the Actions tab.
+- The workflow passes only the vars a `--daily_threads` run needs. Its repo secrets are `NBA_API_KEY`, `NBA_STANDINGS_KEY`, `QUERY_TOOL_API_KEY`, `STATS_API_KEY`, `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID_NBA_DAILY_THREADS`.
+- Scheduled workflows run only from the default branch (`main`). Turn the workflow off in the offseason with `gh workflow disable "Daily NBA Schedule"`, and back on with `gh workflow enable`.
+- The Slack bot token can post but cannot read history (no `channels:history` scope). If a real run fails partway, check the channel by hand before re-running, or the posted games will be duplicated.
 
 ## Running
 
@@ -110,7 +115,7 @@ uv run python leaders.py PTS --csv       # $ALL_TIME_LISTS_DIR/nba_points_leader
 
 ## Dry run (no Slack)
 
-Never test against #daily-threads or #Mookie-Blaylock. Patch `SlackClient.send_message` to print instead of post:
+Test format changes with a dry run first, then a real post to #ed-testing. Don't post to #daily-threads or #Mookie-Blaylock unless Jacob asks. Patch `SlackClient.send_message` to print instead of post:
 
 ```bash
 uv run python - --mookie --date 3-21-26 <<'EOF'
