@@ -33,11 +33,13 @@ def national_tv(game: dict) -> list:
 
 
 def games_on(schedule: dict, day: date) -> list:
-    """Games on a date, sorted by start time with nationally televised games first."""
+    """Regular-season games on a date, sorted by start time with nationally televised games first."""
     target = day.strftime("%m/%d/%Y")
     for game_date in schedule.get("leagueSchedule", {}).get("gameDates", []):
         if game_date.get("gameDate", "").startswith(target):
-            games = game_date.get("games", [])
+            # Regular season only: gameId "002…" (includes NBA Cup group/knockout games). Skips
+            # preseason 001, All-Star 003, playoffs 004, play-in 005 and the Cup final 006.
+            games = [g for g in game_date.get("games", []) if g.get("gameId", "").startswith("002")]
             break
     else:
         return []
