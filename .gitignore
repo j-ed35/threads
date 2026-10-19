@@ -6,68 +6,8 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-dist/
-build/
-*.egg
-
-# Virtual environments
 .venv/
-venv/
-env/
-ENV/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS files
+# OS / tools
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Testing
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-.tox/
-.nox/
-tests/
-test_*.py
-*_test.py
-
-# Local development/testing files
-main_test.py
-main_to_ed.py
-print_mock_games.py
-count_broadcasters.py
-print_games.py
-schedule.json
-full_schedule_response.json
-nba_schedule_output.txt
-
-# Documentation (local only)
-docs/
-
-# Personal files
-personal/
-
-two_main.py
-LOCAL_README.md
-LOCAL_README_V2.md
-logs/
-
 .claude
-
-output/
