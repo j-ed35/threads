@@ -17,6 +17,7 @@ Posts one Slack message per NBA game, with a threaded reply for secondary rankin
 |---|---|
 | `main.py` | CLI and run orchestration |
 | `leaders.py` | Posts all-time career leaders for one stat to #Mookie-Blaylock, or writes a CSV |
+| `scores.py` | Posts a night's scores plus both conference standings to #Mookie-Blaylock |
 | `src/config.py` | Env vars, `CHANNELS` table, `ChannelSettings`, `season_for`, `Config.validate` |
 | `src/nba_api.py` | `NBAClient`: every api.nba.com request goes through `_get`, which counts calls |
 | `src/rankings.py` | `RankingsChecker`: team stats (querytool) and player leaders, indexed by teamId and tricode |
@@ -73,6 +74,7 @@ Shell shortcuts (`nba` function in `~/.zshrc`; a trailing `M-D-YY` becomes `--da
 | `nba threads [date]` | `main.py --daily_threads` |
 | `nba threads ed [date]` | `main.py` (#ed-testing) |
 | `nba mookie [date]` | `main.py --mookie` |
+| `nba mookie scores [date]` | `scores.py [date]` |
 | `nba mookie <stat> [csv]` | `leaders.py <stat> [--csv]` |
 
 **#ed-testing mirrors #daily-threads exactly.** In `src/config.py` both entries point at the same `DAILY_THREADS` settings object and run the same code path; only the channel ID differs. Never give #ed-testing its own settings, and never branch on the channel name anywhere else. A per-channel behavior belongs in `ChannelSettings`.
@@ -110,7 +112,36 @@ uv run python main.py --date 3-21-26     # a specific date (combine with any cha
 uv run python leaders.py AST             # all-time top 20 assists -> #Mookie-Blaylock
 uv run python leaders.py TD3 -n 5        # custom count (defaults: 20, DD2 15, TD3 10)
 uv run python leaders.py PTS --csv       # $ALL_TIME_LISTS_DIR/nba_points_leaders.csv
+uv run python scores.py                  # last night's scores + standings -> #Mookie-Blaylock
+uv run python scores.py 10-20-26         # a specific night
 ```
+## Nightly scores (`scores.py`)
+
+```
+SCORES
+TUESDAY, JAN. 27
+
+POR 111 - 115 WAS
+HOU 124 - 125 OKC (2OT)
+
+Eastern Conference
+#1 :_det: DET (34-11)
+…
+#6 :_phi: PHI (25-21)
+___
+#7 …
+#10 :_atl: ATL (23-25)
+====
+#11 …
+Western Conference
+…
+```
+- One message. Games are listed in tip-off order, regular season only (same `games_on` filter as the threads).
+- Overtime finals are tagged `(OT)`, `(2OT)` and so on. Unfinished games show their status instead: a live clock, a tip time like `(7:00 pm ET)`, or `(Postponed)`.
+- Standings come from `playoffRank`, with a `___` line after the 6th seed and `====` after the 10th.
+- Default date: runs before 6 AM (`NEW_DAY_HOUR`) cover the previous night, since games end around 1–1:30 AM ET. Later runs cover today. Pass `M-D-YY` for any other date.
+- The standings endpoint always returns the current table, so for a past date the records are today's, not that night's.
+
 `leaders.py` stat tags: GP, PTS, REB, AST, STL, BLK, 3PM/FG3M, FGM, FTM, OREB, DREB, TOV, MIN, FG3A, DD2, TD3 (a leading `-` is accepted). DD2/TD3 come from `/querytool/season/player` with `SeasonYear=All` because the career endpoint lacks them.
 
 ## Dry run (no Slack)
@@ -126,7 +157,7 @@ sys.argv[0] = "main.py"
 import runpy; runpy.run_path("main.py", run_name="__main__")
 EOF
 ```
-`send_game_with_thread` calls `send_message`, so replies print too (prefixed `↳`). Real posts wait out Slack 429 rate limits (`Retry-After`); a full slate is roughly 3 messages per game. The same patch works for `leaders.py`. A real channel ID env var must still be set, because config validation runs first; nothing is posted.
+`send_game_with_thread` calls `send_message`, so replies print too (prefixed `↳`). Real posts wait out Slack 429 rate limits (`Retry-After`); a full slate is roughly 3 messages per game. The same patch works for `leaders.py` and `scores.py`. A real channel ID env var must still be set, because config validation runs first; nothing is posted.
 
 ## Adding a stat
 
