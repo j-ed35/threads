@@ -1,77 +1,77 @@
 import argparse
+import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime
 
-from src.config import Config
+from src.config import Config, season_for
+from src.formatter import GameFormatter, games_on, index_standings
+from src.injuries import index_injuries
+from src.milestones import MilestonesChecker
 from src.nba_api import NBAClient
 from src.rankings import RankingsChecker
-from src.formatter import GameFormatter
 from src.slack_client import SlackClient
+
+HEADER_EMOJI = ":nba:"
 
 
 def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Send NBA game data to Slack")
-    parser.add_argument(
-        "--ed_testing",
-        action="store_true",
-        help="Send to #ed-testing channel instead of #daily-threads",
-    )
+    parser = argparse.ArgumentParser(description="Post NBA game threads to Slack (default: #ed-testing)")
+    parser.add_argument("--daily_threads", action="store_true", help="Post to #daily-threads")
+    parser.add_argument("--mookie", action="store_true", help="Post to #Mookie-Blaylock (injuries + milestones)")
+    parser.add_argument("--date", help="Target date in M-D-YY format (e.g. 3-21-26). Defaults to today.")
     args = parser.parse_args()
 
-    try:
-        # Validate configuration
-        Config.validate()
+    started = time.perf_counter()
+    channel_name = "#Mookie-Blaylock" if args.mookie else "#daily-threads" if args.daily_threads else "#ed-testing"
+    channel_id, settings = Config.channel(channel_name)
 
-        # Initialize clients
-        nba = NBAClient()
-        rankings_checker = RankingsChecker()
+    day = datetime.strptime(args.date, "%m-%d-%y").date() if args.date else date.today()
+    date_str = f"{day.month}-{day.day}-{day:%y}"
+    season = season_for(day)
+    nba = NBAClient()
+    slack = SlackClient(channel_id)
 
-        # Select channel based on flag (default: daily threads)
-        if args.ed_testing:
-            channel_id = Config.SLACK_CHANNEL_ID_ED_TESTING
-            channel_name = "#ed-testing"
-        else:
-            channel_id = Config.SLACK_CHANNEL_ID_DAILY_THREADS
-            channel_name = "#daily-threads"
+    print(f"Loading {season} schedule, standings, rankings for {date_str} ({channel_name})...")
+    rankings = RankingsChecker(nba)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        schedule = executor.submit(nba.get_schedule, season)
+        standings = executor.submit(nba.get_standings, season)
+        injuries = executor.submit(nba.get_injuries) if settings.include_injuries else None
+        rankings_loaded = executor.submit(rankings.load, season)
 
-        slack = SlackClient(channel_id=channel_id)
-
-        formatter = GameFormatter(nba_client=nba, rankings_checker=rankings_checker)
-
-        # Load rankings data once
-        print("Loading team and player rankings...")
-        formatter.load_rankings(season_year="2025-26")
-
-        # Fetch games
-        print("Fetching today's NBA games...")
-        data = nba.get_todays_games()
-
-        # Format games with parent/thread structure
-        print("Formatting games...")
-        formatted_games = formatter.format_games_with_threads(data)
-
-        if not formatted_games:
-            print("No games scheduled for today")
-            slack.send_message("No NBA games scheduled for today")
+        games = games_on(schedule.result(), day)
+        if not games:
+            print(f"No games scheduled for {date_str}")
+            slack.send_message(f"No NBA games scheduled for {date_str}")
             return
 
-        # Send each game as parent message with threaded replies
-        print(f"Sending {len(formatted_games)} games to Slack ({channel_name})...")
-        for i, game_data in enumerate(formatted_games, 1):
-            parent_text = game_data["parent"]
-            thread_text = game_data["thread"]
-            injury_thread = game_data.get("injury_thread")
+        milestones = None
+        if settings.include_milestones:
+            milestones = MilestonesChecker(nba, season)
+            # Rankings keep loading in the background meanwhile.
+            milestones.load(g[side]["teamId"] for g in games for side in ("awayTeam", "homeTeam"))
 
-            result = slack.send_game_with_thread(parent_text, thread_text, injury_thread)
+        rankings_loaded.result()
+        try:
+            standings_index = index_standings(standings.result())
+        except Exception as e:
+            print(f"Warning: could not fetch standings, posting without seeds/records: {e}")
+            standings_index = {}
+        injuries_index = index_injuries(injuries.result()) if injuries else None
 
-            thread_status = "with thread" if thread_text else "no thread"
-            injury_status = "+ injuries" if injury_thread else ""
-            print(f"Game {i}/{len(formatted_games)}: sent ({thread_status}{injury_status})")
+    formatter = GameFormatter(rankings, standings_index, injuries_index, milestones)
+    formatted = [formatter.format_game(g) for g in games]
+    print(f"Fetched in {time.perf_counter() - started:.1f}s with {NBAClient.call_count} NBA API calls")
 
-        print(f"✓ All {len(formatted_games)} games sent successfully!")
-
-    except Exception as e:
-        print(f"✗ Error: {e}")
-        raise
+    game_word = "Game" if len(formatted) == 1 else "Games"
+    slack.send_message(f"{HEADER_EMOJI} {len(formatted)} {game_word} for {date_str}")
+    slack.send_message("———")
+    slack.send_message("———")
+    for i, game in enumerate(formatted, 1):
+        slack.send_game_with_thread(game["parent"], game["thread"], game["injury_thread"])
+        replies = "+".join(k for k in ("thread", "injury_thread") if game[k]) or "no replies"
+        print(f"Game {i}/{len(formatted)} sent ({replies})")
+    print(f"✓ Posted {len(formatted)} games to {channel_name} in {time.perf_counter() - started:.1f}s")
 
 
 if __name__ == "__main__":
