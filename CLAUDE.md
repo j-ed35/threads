@@ -9,7 +9,7 @@ Posts one Slack message per NBA game, with a threaded reply for secondary rankin
 3. Load in parallel: the full-season schedule, standings, the injury report (only if `include_injuries`), and every team and player top-10 ranking (`RankingsChecker.load`, also parallel). If standings fail, the run continues without seeds, streaks or home/away lines. A single failed ranking, leaderboard or roster fetch is logged and skipped.
 4. Filter the schedule to the date's regular-season games: `gameId` starting `002`, which includes NBA Cup group and knockout games. Preseason (`001`), All-Star (`003`), playoffs (`004`), play-in (`005`) and the Cup final (`006`) are skipped. If no games remain, post "No NBA games scheduled for …" and stop.
 5. If `include_milestones`: load all career leaderboards and each playing team's roster once, in parallel (`MilestonesChecker.load`).
-6. Format every game (`GameFormatter.format_game`), then post `:nba: N Games for M-D-YY` plus two `———` dividers, then each game's parent and replies.
+6. Format every game (`GameFormatter.format_game`), then post `:bouncing-basketball-w-nba-symblo: N Games for M-D-YY` (the misspelling matches the Slack emoji; ` :nbacup:` is appended when any game is an NBA Cup game) plus two `———` dividers, then each game's parent and replies.
 
 ## Module map
 
@@ -52,12 +52,13 @@ If a Mookie game has no milestones or no injuries, the placeholder line stays.
 
 Rules:
 - Header: the away side reads `#seed TRI (W-L) :_tri:`, the home side reads `:_tri: #seed TRI (W-L)`, so the logos sit on either side of "at". The seed is standings `playoffRank`, the W-L record comes from the schedule, and the clinch indicator follows the record (`format_clinch_indicator`). All national TV broadcasters (`broadcasterScope == "natl"` and `broadcasterMedia == "tv"`) are mapped through `BROADCASTER_EMOJI_MAP`, deduplicated by emoji, and joined with spaces.
+- NBA Cup games (`gameSubtype` `in-season` for groups, `in-season-knockout` for the quarterfinals and semifinals) start the header with `:nbacup: ` and add the round (`gameSubLabel`, e.g. `East Group C`, `Quarterfinal`) as the second line, before the streak lines.
 - Standings lines show even at 0-0 (start of season). This is intentional.
 - Team rankings: one line per team per message, ranks 1–10 ordered by rank. Parent stats are `PPG, FG%, 3P%, BLK, Opp PPG, 3PM`; thread stats are `Net RTG, Off RTG, Def RTG, AST, REB, STL`.
 - Player rankings: one line per player, players alphabetical within a team, stats in the order PPG, RPG, APG, FG%, 3P%, 3PM, SPG, BPG. Split by rank: ranks 1–5 go in the parent, 6–10 in the thread, so a player can appear in both. FG%/3P% arrive as fractions and are shown ×100 to 1 decimal.
 - `:t10: Other Top 10s threaded` appears only if the thread has at least one ranking line.
 - Early season: the player leaders endpoint returns the previous season when the requested one has no games yet. `get_top_players` drops any response whose `season` doesn't match, so player and team ranks stay empty until games are played.
-- Emojis: team logos `:_{tricode_lower}:`, `:t10:`, `:notable:`, `:mst:`, `:gtd:`, `:out:`, run header `:nba:`.
+- Emojis: team logos `:_{tricode_lower}:`, `:t10:`, `:notable:`, `:mst:`, `:gtd:`, `:out:`, `:nbacup:`, run header `:bouncing-basketball-w-nba-symblo:`.
 
 ## Channels
 

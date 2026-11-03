@@ -4,14 +4,14 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 
 from src.config import Config, season_for
-from src.formatter import GameFormatter, games_on, index_standings
+from src.formatter import CUP_EMOJI, GameFormatter, games_on, index_standings, is_cup_game
 from src.injuries import index_injuries
 from src.milestones import MilestonesChecker
 from src.nba_api import NBAClient
 from src.rankings import RankingsChecker
 from src.slack_client import SlackClient
 
-HEADER_EMOJI = ":nba:"
+HEADER_EMOJI = ":bouncing-basketball-w-nba-symblo:"
 
 
 def main():
@@ -64,7 +64,8 @@ def main():
     print(f"Fetched in {time.perf_counter() - started:.1f}s with {NBAClient.call_count} NBA API calls")
 
     game_word = "Game" if len(formatted) == 1 else "Games"
-    slack.send_message(f"{HEADER_EMOJI} {len(formatted)} {game_word} for {date_str}")
+    cup = f" {CUP_EMOJI}" if any(is_cup_game(g) for g in games) else ""
+    slack.send_message(f"{HEADER_EMOJI} {len(formatted)} {game_word} for {date_str}{cup}")
     slack.send_message("———")
     slack.send_message("———")
     for i, game in enumerate(formatted, 1):

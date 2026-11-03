@@ -3,6 +3,8 @@ from datetime import date, datetime
 from . import injuries as inj
 from .mapping import get_broadcaster_emoji
 
+CUP_EMOJI = ":nbacup:"
+
 
 def format_time(game_time_est: str) -> str:
     try:
@@ -54,6 +56,11 @@ def games_on(schedule: dict, day: date) -> list:
     return sorted(games, key=sort_key)
 
 
+def is_cup_game(game: dict) -> bool:
+    """NBA Cup group ("in-season") and knockout ("in-season-knockout") games."""
+    return (game.get("gameSubtype") or "").startswith("in-season")
+
+
 def index_standings(data: dict) -> dict:
     return {t.get("teamId"): t for t in data.get("leagueStandings", {}).get("teams", [])}
 
@@ -85,6 +92,8 @@ class GameFormatter:
 
         parent = [
             self._header(game),
+            # The Cup round, e.g. "East Group C" or "Quarterfinal".
+            game.get("gameSubLabel", "") if is_cup_game(game) else "",
             *(self._streak_line(tid, tri) for tid, tri in teams),
             *(self._team_line(tid, tri, self.PARENT_TEAM_STATS) for tid, tri in teams),
             *(self._player_lines(tri, 1, 5) for _, tri in teams),
@@ -121,7 +130,8 @@ class GameFormatter:
         away_logo = f":_{game.get('awayTeam', {}).get('teamTricode', '').lower()}:"
         home_logo = f":_{game.get('homeTeam', {}).get('teamTricode', '').lower()}:"
         # Logos sit on the outside of "at": `#8 MIN (0-0) :_min: at :_mia: #9 MIA (0-0)`.
-        header = f"{away} {away_logo} at {home_logo} {home} | {format_time(game.get('gameTimeEst', ''))}"
+        cup = f"{CUP_EMOJI} " if is_cup_game(game) else ""
+        header = f"{cup}{away} {away_logo} at {home_logo} {home} | {format_time(game.get('gameTimeEst', ''))}"
         # Dedupe on the emoji: NBC and Telemundo share :_nbc_peacock:.
         tv = " ".join(dict.fromkeys(get_broadcaster_emoji(name) for name in national_tv(game)))
         return f"{header} | {tv}" if tv else header

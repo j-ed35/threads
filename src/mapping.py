@@ -2,12 +2,14 @@
 BROADCASTER_EMOJI_MAP = {
     "NBA TV": "NBATV",
     "ESPN": "ESPN",
+    "ESPN2": "espn2",
     "TNT": "TNT",
     "ABC": "ABC",
     "Prime Video": "PrimeVideo",
     "Peacock": "peacock",
     "NBC": "nbc_peacock",
     "Telemundo": "nbc_peacock",
+    "NBC Sports Network": "nbcsn",
 }
 
 
