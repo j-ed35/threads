@@ -96,7 +96,7 @@ See `.env.example`.
 
 ## Deployment
 
-- `.github/workflows/daily_schedule.yml` ("Daily NBA Schedule") runs `uv run python main.py --daily_threads` on cron `15 16 * * *`, which is 12:15 PM ET during daylight saving and 11:15 AM ET in winter. It can also be run by hand from the Actions tab.
+- `.github/workflows/daily_schedule.yml` ("Daily NBA Schedule") runs `uv run python main.py --daily_threads` on cron `37 18 * * *` (UTC), which is 1:37 PM ET in winter and 2:37 PM ET during daylight saving. The odd minute is deliberate: GitHub queues scheduled runs at busy times like the top of the hour, which can delay them by hours. It can also be run by hand from the Actions tab.
 - The workflow passes only the vars a `--daily_threads` run needs. Its repo secrets are `NBA_API_KEY`, `NBA_STANDINGS_KEY`, `QUERY_TOOL_API_KEY`, `STATS_API_KEY`, `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID_NBA_DAILY_THREADS`.
 - Scheduled workflows run only from the default branch (`main`). Turn the workflow off in the offseason with `gh workflow disable "Daily NBA Schedule"`, and back on with `gh workflow enable`.
 - The Slack bot token can post but cannot read history (no `channels:history` scope). If a real run fails partway, check the channel by hand before re-running, or the posted games will be duplicated.

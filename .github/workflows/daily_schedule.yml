@@ -3,8 +3,9 @@ name: Daily NBA Schedule
 # Scheduled workflows only run from the default branch (main).
 on:
   schedule:
-    # 16:15 UTC = 12:15 PM EDT / 11:15 AM EST
-    - cron: '15 16 * * *'
+    # 18:37 UTC = 1:37 PM EST / 2:37 PM EDT. An off-peak minute, because
+    # GitHub delays scheduled runs that start on the hour or half hour.
+    - cron: '37 18 * * *'
 
   # Allows manual trigger from Actions tab
   workflow_dispatch:
