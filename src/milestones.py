@@ -29,8 +29,7 @@ class MilestonesChecker:
         "BASE_FG3M": ("3PM", "FG3M", 10),
     }
 
-    MAX_ROWS = 250
-    # Only report passing into this rank or better; a player is at most one spot below it.
+    # Only report passing into this rank or better, so only ranks 1..MAX_RANK+1 are fetched.
     MAX_RANK = 20
 
     def __init__(self, client: NBAClient, season: str):
@@ -44,7 +43,7 @@ class MilestonesChecker:
     def _fetch_leaderboard(self, measure: str) -> list:
         label, sort_col, _ = self.STATS[measure]
         try:
-            players = self.client.get_career_leaders(measure, sort_col, self.MAX_ROWS)
+            players = self.client.get_career_leaders(measure, sort_col, self.MAX_RANK + 1)
         except Exception as e:
             print(f"Warning: could not fetch career {label}: {e}")
             return []
@@ -80,13 +79,13 @@ class MilestonesChecker:
         lines = []
         for measure, (label, _, threshold) in self.STATS.items():
             rows = self._leaderboards.get(measure, [])
-            for i, row in enumerate(rows[1 : self.MAX_RANK + 1], start=1):
+            for i, row in enumerate(rows[1:], start=1):
                 if row["playerId"] not in player_ids:
                     continue
                 above = rows[i - 1]
                 # +1: matching the value only ties; one more is needed to pass.
                 needed = above["value"] - row["value"] + 1
-                if needed <= 0 or needed > threshold:
+                if needed > threshold:
                     continue
                 lines.append(
                     f"{row['name']} ({row['value']:,.0f}) needs {needed:,.0f} {label} "

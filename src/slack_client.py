@@ -31,12 +31,8 @@ class SlackClient:
             raise Exception(f"Slack API error: {data.get('error', 'unknown error')}")
         return data
 
-    def send_game_with_thread(
-        self, parent_text: str, thread_text: str = None, injury_thread: str = None
-    ) -> dict:
-        """Post the parent message, then each non-empty reply in its thread."""
-        ts = self.send_message(parent_text).get("ts")
-        for reply in (thread_text, injury_thread):
-            if reply and ts:
-                self.send_message(reply, thread_ts=ts)
-        return {"ts": ts}
+    def send_game_with_thread(self, parent: str, replies: list):
+        """Post the parent message, then each reply in its thread."""
+        ts = self.send_message(parent)["ts"]
+        for reply in replies:
+            self.send_message(reply, thread_ts=ts)

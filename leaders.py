@@ -49,13 +49,12 @@ DEFAULT_COUNTS = {"DD2": 15, "TD3": 10}
 
 
 def fetch_leaders(tag: str, count: int) -> list:
-    """Top `count` career leaders for a stat tag as [(name, value)], zero rows dropped."""
+    """Top `count` career leaders for a stat tag as [(name, value)]."""
     measure, sort_col, _, _ = STATS[tag]
     players = NBAClient().get_career_leaders(
         measure, sort_col, count, season_endpoint=tag in SEASON_ENDPOINT_STATS
     )
-    leaders = [(p.get("name", ""), p.get("stats", {}).get(sort_col) or 0) for p in players[:count]]
-    return [(name, value) for name, value in leaders if value > 0]
+    return [(p["name"], p["stats"][sort_col]) for p in players]
 
 
 def main():

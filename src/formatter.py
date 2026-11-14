@@ -66,7 +66,7 @@ def index_standings(data: dict) -> dict:
 
 
 class GameFormatter:
-    """Builds the parent message, standings/rankings reply and injury reply for each game."""
+    """Builds each game's parent message and its replies (records/rankings, then injuries)."""
 
     PARENT_TEAM_STATS = {"PPG", "FG%", "3P%", "BLK", "Opp PPG", "3PM"}
     THREAD_TEAM_STATS = {"Net RTG", "Off RTG", "Def RTG", "AST", "REB", "STL"}
@@ -107,22 +107,19 @@ class GameFormatter:
         injury_summary = inj.format_summary(self.injuries, away_id, home_id) if self.injuries is not None else ""
         parent.append(injury_summary or ":out: INJURIES")
 
-        injury_thread = None
-        if self.injuries is not None:
-            injury_thread = inj.format_thread(self.injuries, away_id, home_id, away_tri, home_tri) or None
-
-        # Always posted: home/away records lead, then the thread rankings.
-        thread_lines = [
+        # Reply 1: home/away records lead, then the thread rankings.
+        thread = [
             self._location_line(away_id, away_tri, home=False),
             self._location_line(home_id, home_tri, home=True),
             *thread_rankings,
         ]
-        thread = "\n".join(line for line in thread_lines if line) or None
+        replies = ["\n".join(line for line in thread if line)]
+        if self.injuries is not None:
+            replies.append(inj.format_thread(self.injuries, away_id, home_id, away_tri, home_tri))
 
         return {
             "parent": "\n".join(line for line in parent if line),
-            "thread": thread,
-            "injury_thread": injury_thread,
+            "replies": [reply for reply in replies if reply],
         }
 
     def _header(self, game: dict) -> str:
@@ -168,7 +165,6 @@ class GameFormatter:
 
     def _player_lines(self, tri: str, min_rank: int, max_rank: int) -> str:
         """One line per player (alphabetical) with their ranks in [min_rank, max_rank]."""
-        order = self.rankings.PLAYER_STAT_ORDER
         by_player = {}
         for r in self.rankings.player_rankings(tri):
             if min_rank <= r["rank"] <= max_rank:
@@ -176,7 +172,7 @@ class GameFormatter:
         lines = []
         for name in sorted(by_player):
             parts = []
-            for r in sorted(by_player[name], key=lambda r: order.index(r["stat"])):
+            for r in by_player[name]:
                 value = r["value"] * 100 if r["stat"] in self.PERCENT_STATS else r["value"]
                 parts.append(f"#{r['rank']} in {r['stat']} ({value:.1f})")
             lines.append(f":t10: {name} ({tri}) ranks {', '.join(parts)}")

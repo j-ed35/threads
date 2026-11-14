@@ -6,7 +6,8 @@ from .nba_api import NBAClient
 class RankingsChecker:
     """Fetches season top-10 team and player rankings and indexes them for O(1) lookups."""
 
-    # measure -> (response stat key / sort column, display label, lower-is-better)
+    # measure -> (response stat key / sort column, display label, lower-is-better).
+    # Order breaks ties between equal ranks.
     TEAM_STATS = {
         "BASE_PTS": ("PTS_PG", "PPG", False),
         "BASE_FG_PCT": ("FG_PCT", "FG%", False),
@@ -33,8 +34,6 @@ class RankingsChecker:
         "STL": ("stl", "SPG"),
         "BLK": ("blk", "BPG"),
     }
-    PLAYER_STAT_ORDER = [label for _, label in PLAYER_STATS.values()]
-    TEAM_STAT_ORDER = [label for _, label, _ in TEAM_STATS.values()]
 
     def __init__(self, client: NBAClient):
         self.client = client
@@ -84,10 +83,9 @@ class RankingsChecker:
                     self._players.setdefault(tricode, []).append(info)
 
     def team_rankings(self, team_id) -> list:
-        """A team's top-10 ranks, ordered by rank then display order."""
-        ranks = self._teams.get(str(team_id), [])
-        return sorted(ranks, key=lambda r: (r["rank"], self.TEAM_STAT_ORDER.index(r["stat"])))
+        """A team's top-10 ranks, ordered by rank (ties stay in TEAM_STATS order)."""
+        return sorted(self._teams.get(str(team_id), []), key=lambda r: r["rank"])
 
     def player_rankings(self, tricode: str) -> list:
-        """Every top-10 rank held by a player on this team."""
+        """Every top-10 rank held by a player on this team, in PLAYER_STATS order."""
         return self._players.get(tricode, [])

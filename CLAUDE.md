@@ -19,9 +19,9 @@ Posts one Slack message per NBA game, with a threaded reply for secondary rankin
 | `leaders.py` | Posts all-time career leaders for one stat to #Mookie-Blaylock, or writes a CSV |
 | `scores.py` | Posts a night's scores plus both conference standings to #Mookie-Blaylock |
 | `src/config.py` | Env vars, `CHANNELS` table, `ChannelSettings`, `season_for`, `Config.validate` |
-| `src/nba_api.py` | `NBAClient`: every api.nba.com request goes through `_get`, which counts calls |
+| `src/nba_api.py` | `NBAClient`: every api.nba.com request goes through `_get` |
 | `src/rankings.py` | `RankingsChecker`: team stats (querytool) and player leaders, indexed by teamId and tricode |
-| `src/formatter.py` | `GameFormatter`: builds the parent message, rankings reply and injury reply |
+| `src/formatter.py` | `GameFormatter`: builds each game's parent message and its list of replies |
 | `src/injuries.py` | Indexes the league injury report by team; formats the summary and the detail reply |
 | `src/milestones.py` | `MilestonesChecker`: all-time career milestone lines |
 | `src/mapping.py` | Broadcaster → Slack emoji map; `PLAYERS_EXCLUDED` from injury output |
@@ -90,7 +90,6 @@ See `.env.example`.
 | `NBA_STANDINGS_KEY` | standings |
 | `QUERY_TOOL_API_KEY` | team rankings, career leaderboards (milestones, `leaders.py`) |
 | `STATS_API_KEY` | player leaders, injuries, rosters |
-| `NBA_ALERTS_API_KEY` | not used by any request; kept for reference |
 | `SLACK_BOT_TOKEN` | Slack |
 | `SLACK_CHANNEL_ID_*` | one per channel (above) |
 | `ALL_TIME_LISTS_DIR` | optional; output dir for `leaders.py --csv` |
@@ -163,13 +162,13 @@ EOF
 ## Adding a stat
 
 - **Team ranking**: add `measure: (response key, label, lower_is_better)` to `RankingsChecker.TEAM_STATS`, then put the label in `GameFormatter.PARENT_TEAM_STATS` or `THREAD_TEAM_STATS`. The response key doubles as the sort column.
-- **Player ranking**: add `statCategory: (response key, label)` to `RankingsChecker.PLAYER_STATS`. Its position in the dict sets the display order. Add the label to `GameFormatter.PERCENT_STATS` if the API returns a fraction.
+- **Player ranking**: add `statCategory: (response key, label)` to `RankingsChecker.PLAYER_STATS`. Its position in the dict sets the display order (for team stats, dict order breaks ties between equal ranks). Add the label to `GameFormatter.PERCENT_STATS` if the API returns a fraction.
 - **Milestone**: add `measure: (label, sort column, threshold)` to `MilestonesChecker.STATS`.
 - **leaders.py**: add a tag to `STATS`; add it to `SEASON_ENDPOINT_STATS` if the career endpoint doesn't return it.
 
 ## Tuning milestones
 
-`MilestonesChecker.STATS` thresholds (PTS 50, REB/AST/FGM 15, FTM/STL/BLK/3PM 10) are carried over from the WNBA bot, so treat them as a starting point and tune them for NBA volumes. `MAX_RANK = 20` reports only passes into the all-time top 20, so a player is checked only from rank 21 up. `needed = above − player + 1`, because matching only ties. Active players are matched by `playerId` against that day's team rosters, not by team abbreviation, because the career endpoint reports multi-team players as "MTM"/teamId 0.
+`MilestonesChecker.STATS` thresholds (PTS 50, REB/AST/FGM 15, FTM/STL/BLK/3PM 10) are carried over from the WNBA bot, so treat them as a starting point and tune them for NBA volumes. `MAX_RANK = 20` reports only passes into the all-time top 20, so only the top 21 rows of each leaderboard are fetched. `needed = above − player + 1`, because matching only ties. Active players are matched by `playerId` against that day's team rosters, not by team abbreviation, because the career endpoint reports multi-team players as "MTM"/teamId 0.
 
 ## Season rollover
 

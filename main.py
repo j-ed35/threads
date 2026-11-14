@@ -26,7 +26,7 @@ def main():
     channel_id, settings = Config.channel(channel_name)
 
     day = datetime.strptime(args.date, "%m-%d-%y").date() if args.date else date.today()
-    date_str = f"{day.month}-{day.day}-{day:%y}"
+    date_str = f"{day:%-m-%-d-%y}"
     season = season_for(day)
     nba = NBAClient()
     slack = SlackClient(channel_id)
@@ -61,7 +61,7 @@ def main():
 
     formatter = GameFormatter(rankings, standings_index, injuries_index, milestones)
     formatted = [formatter.format_game(g) for g in games]
-    print(f"Fetched in {time.perf_counter() - started:.1f}s with {NBAClient.call_count} NBA API calls")
+    print(f"Fetched in {time.perf_counter() - started:.1f}s")
 
     game_word = "Game" if len(formatted) == 1 else "Games"
     cup = f" {CUP_EMOJI}" if any(is_cup_game(g) for g in games) else ""
@@ -69,9 +69,8 @@ def main():
     slack.send_message("———")
     slack.send_message("———")
     for i, game in enumerate(formatted, 1):
-        slack.send_game_with_thread(game["parent"], game["thread"], game["injury_thread"])
-        replies = "+".join(k for k in ("thread", "injury_thread") if game[k]) or "no replies"
-        print(f"Game {i}/{len(formatted)} sent ({replies})")
+        slack.send_game_with_thread(game["parent"], game["replies"])
+        print(f"Game {i}/{len(formatted)} sent")
     print(f"✓ Posted {len(formatted)} games to {channel_name} in {time.perf_counter() - started:.1f}s")
 
 

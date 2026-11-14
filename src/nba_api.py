@@ -1,27 +1,20 @@
-import threading
-
 import requests
 
 from .config import Config
 
 
 class NBAClient:
-    """Thin wrapper over api.nba.com. Every request goes through _get so calls are counted."""
-
-    call_count = 0
-    _count_lock = threading.Lock()
+    """Thin wrapper over api.nba.com."""
 
     def __init__(self):
         self.session = requests.Session()
 
-    def _get(self, path: str, key: str, params: dict, timeout: int = 15) -> dict:
-        with NBAClient._count_lock:
-            NBAClient.call_count += 1
+    def _get(self, path: str, key: str, params: dict) -> dict:
         response = self.session.get(
             f"{Config.NBA_API_BASE}{path}",
             headers={"X-NBA-Api-Key": key},
             params=params,
-            timeout=timeout,
+            timeout=15,
         )
         response.raise_for_status()
         return response.json()

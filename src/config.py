@@ -33,7 +33,6 @@ def season_for(d: date) -> str:
 
 class Config:
     NBA_API_KEY = os.getenv("NBA_API_KEY")
-    NBA_ALERTS_API_KEY = os.getenv("NBA_ALERTS_API_KEY")
     NBA_STANDINGS_KEY = os.getenv("NBA_STANDINGS_KEY")
     QUERY_TOOL_API_KEY = os.getenv("QUERY_TOOL_API_KEY")
     STATS_API_KEY = os.getenv("STATS_API_KEY")

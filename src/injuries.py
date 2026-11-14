@@ -46,7 +46,4 @@ def format_thread(injuries: dict, away_id, home_id, away_tri: str, home_tri: str
         ]
         if rows:
             sections.append("\n".join([title, *rows]))
-    if not sections:
-        return ""
-    # Hardcoded from v1, which ran from the 12:15pm ET GitHub Action.
-    return "_Injuries Current as of 12PM ET_\n\n" + "\n\n".join(sections)
+    return "\n\n".join(sections)
