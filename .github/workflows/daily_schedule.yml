@@ -1,13 +1,10 @@
 name: Daily NBA Schedule
 
-# Scheduled workflows only run from the default branch (main).
+# Triggered daily at 12:30 PM ET by a cron-job.org job ("threads daily
+# dispatch") that POSTs to the workflow_dispatch API. GitHub's own `schedule`
+# trigger was removed because it routinely ran hours late.
+# Can also be run by hand from the Actions tab.
 on:
-  schedule:
-    # 18:37 UTC = 1:37 PM EST / 2:37 PM EDT. An off-peak minute, because
-    # GitHub delays scheduled runs that start on the hour or half hour.
-    - cron: '37 18 * * *'
-
-  # Allows manual trigger from Actions tab
   workflow_dispatch:
 
 jobs:
